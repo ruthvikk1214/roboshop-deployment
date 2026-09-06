@@ -49,3 +49,10 @@ resume.css
 resume.html
 resume.md
 Sanjeev_Sriram_Resume.pdf
+
+# Terraform
+.terraform/
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl

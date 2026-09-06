@@ -1,0 +1,300 @@
+# =============================================================================
+# Roboshop Helm Chart - Default Values (Cost-Optimized / Educational)
+# =============================================================================
+
+# -- Global settings applied to all services
+global:
+  imageRegistry: "ruthvikk1214"   # Docker Hub registry prefix (change to ECR for production)
+  imageTag: "1.0"                 # Default image tag for all services
+  imagePullPolicy: IfNotPresent
+
+# -- Namespace (set via helm install --namespace)
+namespace: roboshop
+
+# =============================================================================
+# Stateless Microservices
+# =============================================================================
+
+catalogue:
+  name: catalogue
+  replicaCount: 1
+  image:
+    repository: catalogue
+    tag: ""           # Falls back to global.imageTag if empty
+  containerPort: 8080
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    MONGO: "true"
+    MONGO_URL: "mongodb://mongodb:27017/catalogue"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+cart:
+  name: cart
+  replicaCount: 1
+  image:
+    repository: cart
+    tag: ""
+  containerPort: 8080
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    CATALOGUE_HOST: "catalogue"
+    CATALOGUE_PORT: "8080"
+    REDIS_HOST: "redis"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+user:
+  name: user
+  replicaCount: 1
+  image:
+    repository: user
+    tag: ""
+  containerPort: 8080
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    MONGO: "true"
+    MONGO_URL: "mongodb://mongodb:27017/users"
+    REDIS_HOST: "redis"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+shipping:
+  name: shipping
+  replicaCount: 1
+  image:
+    repository: shipping
+    tag: ""
+  containerPort: 8080
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    CART_ENDPOINT: "cart:8080"
+    DB_HOST: "mysql"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+payment:
+  name: payment
+  replicaCount: 1
+  image:
+    repository: payment
+    tag: ""
+  containerPort: 8080
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    CART_HOST: "cart"
+    CART_PORT: "8080"
+    USER_HOST: "user"
+    USER_PORT: "8080"
+    AMQP_HOST: "rabbitmq"
+    AMQP_USER: "roboshop"
+    AMQP_PASS: "roboshop123"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+frontend:
+  name: frontend
+  replicaCount: 1
+  image:
+    repository: frontend
+    tag: ""
+  containerPort: 80
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# =============================================================================
+# Stateful Services (StatefulSets with PVCs)
+# =============================================================================
+
+mongodb:
+  name: mongodb
+  replicaCount: 1
+  image:
+    repository: mongodb
+    tag: ""
+  containerPort: 27017
+  service:
+    type: ClusterIP
+    port: 27017
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""    # Uses cluster default storage class
+    mountPath: /data/db
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+mysql:
+  name: mysql
+  replicaCount: 1
+  image:
+    repository: mysql
+    tag: ""
+  containerPort: 3306
+  service:
+    type: ClusterIP
+    port: 3306
+  env:
+    MYSQL_ROOT_PASSWORD: "RoboShop@1"
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    mountPath: /var/lib/mysql
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+redis:
+  name: redis
+  replicaCount: 1
+  image:
+    repository: redis
+    tag: "7.0"          # Uses upstream Redis image, not custom
+    useGlobalRegistry: false   # Pull from Docker Hub directly
+  containerPort: 6379
+  service:
+    type: ClusterIP
+    port: 6379
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    mountPath: /data
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+rabbitmq:
+  name: rabbitmq
+  replicaCount: 1
+  image:
+    repository: rabbitmq
+    tag: "3"
+    useGlobalRegistry: false   # Pull from Docker Hub directly
+  containerPort: 5672
+  service:
+    type: ClusterIP
+    port: 5672
+  env:
+    RABBITMQ_DEFAULT_USER: "roboshop"
+    RABBITMQ_DEFAULT_PASS: "roboshop123"
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+    mountPath: /var/lib/rabbitmq
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# =============================================================================
+# Ingress (ALB)
+# =============================================================================
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/load-balancer-name: roboshop-alb
+  host: ""    # Leave empty to use ALB default DNS name
+  paths:
+    - path: /
+      pathType: Prefix
+      serviceName: frontend
+      servicePort: 80
+
+# =============================================================================
+# Service Account (IRSA)
+# =============================================================================
+
+serviceAccount:
+  create: true
+  name: roboshop-sa
+  annotations: {}
+  # eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/roboshop-irsa-role
+
+# =============================================================================
+# HorizontalPodAutoscaler (disabled for cost savings)
+# =============================================================================
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+# =============================================================================
+# Monitoring (optional - disabled by default)
+# =============================================================================
+
+monitoring:
+  enabled: false
+  prometheus:
+    scrapeInterval: 30s
+    retention: 7d
+  grafana:
+    adminPassword: admin

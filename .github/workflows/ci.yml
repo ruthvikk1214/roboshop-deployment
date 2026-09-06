@@ -1,0 +1,113 @@
+name: Roboshop CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch: # Manual gate trigger
+
+permissions:
+  id-token: write   # Required for AWS OIDC authentication
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  AWS_OIDC_ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN }} # e.g. arn:aws:iam::123456789012:role/GitHubActionsRole
+
+jobs:
+  # 1. Vulnerability Scanning
+  image-scan:
+    name: Vulnerability Scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Suggestion: Using 'fs' (file system) scan is much faster than building 6 docker images
+      # on every push. It scans the Dockerfiles and package.json/requirements.txt directly.
+      - name: Run Trivy vulnerability scanner in fs mode
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+
+  # 2. Infrastructure Security Scanning
+  terraform-checkov:
+    name: Terraform Security (Checkov)
+    runs-on: ubuntu-latest
+    needs: image-scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov action
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infra/
+          framework: terraform
+          soft_fail: true # Set to false if you want Checkov to break the build on failure
+
+  # 3. Terraform Plan & Validation
+  terraform-plan:
+    name: Terraform Plan & Validate
+    runs-on: ubuntu-latest
+    needs: terraform-checkov
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials from OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: infra
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: infra
+
+      - name: Terraform Plan
+        run: terraform plan -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}"
+        working-directory: infra
+
+  # 4. Terraform Apply (Manual Gate)
+  terraform-apply:
+    name: Terraform Apply (Manual Gate)
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    # This ensures the apply job ONLY runs when you manually trigger it via the Actions UI
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials from OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra
+
+      - name: Terraform Apply
+        run: terraform apply -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" -auto-approve
+        working-directory: infra

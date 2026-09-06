@@ -1,0 +1,16 @@
+apiVersion: v2
+name: roboshop
+version: 0.1.0
+description: Umbrella Helm chart for the Roboshop microservices demo on EKS
+type: application
+appVersion: "1.0.0"
+keywords:
+  - roboshop
+  - microservices
+  - eks
+  - demo
+home: https://github.com/ruthvikk1214/roboshop-docker
+sources:
+  - https://github.com/ruthvikk1214/roboshop-docker
+maintainers:
+  - name: Ruthvik
