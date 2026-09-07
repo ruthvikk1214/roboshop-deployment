@@ -24,6 +24,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Add Maven cache to avoid rate limiting
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # Populate Maven cache before Trivy scan
+      - name: Resolve Maven dependencies
+        run: |
+          find . -name "pom.xml" -type f | while read pom; do
+            mvn -f "$pom" dependency:resolve -DskipTests || true
+          done
+        continue-on-error: true
+
       # Suggestion: Using 'fs' (file system) scan is much faster than building 6 docker images
       # on every push. It scans the Dockerfiles and package.json/requirements.txt directly.
       - name: Run Trivy vulnerability scanner in fs mode
