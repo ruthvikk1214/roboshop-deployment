@@ -1,0 +1,47 @@
+name: Destroy Infrastructure
+
+on:
+  workflow_dispatch: # Only trigger manually
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  destroy:
+    name: Destroy All Resources
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Destroy Helm Deployments (if exists)
+        run: |
+          # Try to connect to EKS. If it fails (cluster doesn't exist), gracefully exit this step.
+          aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }} || exit 0
+          
+          # Try to uninstall the helm chart
+          helm uninstall roboshop -n roboshop || echo "Helm release not found"
+          
+          # Wait a minute to give the AWS Load Balancer Controller time to delete the ALB.
+          # If we don't wait, Terraform destroy might fail because the VPC is still in use by the ALB.
+          echo "Waiting 60 seconds for ALB cleanup..."
+          sleep 60
+        continue-on-error: true
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra
+
+      - name: Terraform Destroy
+        run: terraform destroy -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" -auto-approve
+        working-directory: infra
