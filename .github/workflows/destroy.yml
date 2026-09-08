@@ -29,6 +29,9 @@ jobs:
           # Try to uninstall the helm chart
           helm uninstall roboshop -n roboshop || echo "Helm release not found"
           
+          # Delete PVCs to ensure AWS EBS volumes are properly destroyed before the cluster dies
+          kubectl delete pvc --all -n roboshop || echo "No PVCs found"
+          
           # Wait a minute to give the AWS Load Balancer Controller time to delete the ALB.
           # If we don't wait, Terraform destroy might fail because the VPC is still in use by the ALB.
           echo "Waiting 60 seconds for ALB cleanup..."
