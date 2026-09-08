@@ -2,6 +2,14 @@
 # Route53 – A record for the Roboshop app
 # ------------------------------------------------------------------
 
+terraform {
+  backend "s3" {
+    bucket = "roboshop-terraform-state-rk1214-9988"
+    key    = "route53/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+
 variable "hosted_zone_id" {
   description = "ID of the existing Route53 hosted zone for rk1214.in"
   type        = string

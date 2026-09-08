@@ -10,6 +10,11 @@ terraform {
       version = ">= 5.0"
     }
   }
+  backend "s3" {
+    bucket = "roboshop-terraform-state-rk1214-9988"
+    key    = "infra/terraform.tfstate"
+    region = "us-east-1"
+  }
 }
 
 provider "aws" {
