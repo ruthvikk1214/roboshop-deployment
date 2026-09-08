@@ -1,1 +1,19 @@
-# placeholder
+{{- $allServices := list .Values.catalogue .Values.cart .Values.user .Values.shipping .Values.payment .Values.frontend .Values.mongodb .Values.mysql .Values.redis .Values.rabbitmq }}
+{{- range $svc := $allServices }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app: {{ $svc.name }}
+spec:
+  type: {{ $svc.service.type }}
+  ports:
+    - port: {{ $svc.service.port }}
+      targetPort: {{ $svc.containerPort }}
+      protocol: TCP
+  selector:
+    app: {{ $svc.name }}
+{{- end }}

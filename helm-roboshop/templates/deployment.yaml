@@ -1,1 +1,37 @@
-# placeholder
+{{- $stateless := list .Values.catalogue .Values.cart .Values.user .Values.shipping .Values.payment .Values.frontend }}
+{{- range $svc := $stateless }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $svc.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    app: {{ $svc.name }}
+spec:
+  replicas: {{ $svc.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ $svc.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $svc.name }}
+    spec:
+      serviceAccountName: {{ $.Values.serviceAccount.name }}
+      containers:
+        - name: {{ $svc.name }}
+          image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image.repository }}:{{ default $.Values.global.imageTag $svc.image.tag }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $svc.containerPort }}
+          {{- if $svc.env }}
+          env:
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+{{- end }}

@@ -1,1 +1,41 @@
-# placeholder
+{{- with .Values.rabbitmq }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  serviceName: {{ .name }}
+  replicas: {{ .replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .name }}
+    spec:
+      containers:
+        - name: {{ .name }}
+          image: "{{ .image.repository }}:{{ .image.tag }}"
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: {{ .env.RABBITMQ_DEFAULT_USER | quote }}
+            - name: RABBITMQ_DEFAULT_PASS
+              value: {{ .env.RABBITMQ_DEFAULT_PASS | quote }}
+          ports:
+            - containerPort: {{ .containerPort }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .persistence.mountPath }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: {{ .persistence.size }}
+{{- end }}

@@ -1,1 +1,39 @@
-# placeholder
+{{- with .Values.mysql }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  serviceName: {{ .name }}
+  replicas: {{ .replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .name }}
+    spec:
+      containers:
+        - name: {{ .name }}
+          image: "{{ $.Values.global.imageRegistry }}/{{ .image.repository }}:{{ default $.Values.global.imageTag .image.tag }}"
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: {{ .env.MYSQL_ROOT_PASSWORD | quote }}
+          ports:
+            - containerPort: {{ .containerPort }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .persistence.mountPath }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: {{ .persistence.size }}
+{{- end }}
