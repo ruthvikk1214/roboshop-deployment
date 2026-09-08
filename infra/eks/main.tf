@@ -36,6 +36,9 @@ module "eks" {
   # Enable OIDC so the Helm chart can create an IRSA ServiceAccount
   enable_irsa = true
 
+  # Allow GitHub Actions runner to connect to the cluster API
+  cluster_endpoint_public_access = true
+
   cluster_addons = {
     aws-ebs-csi-driver = {
       most_recent              = true

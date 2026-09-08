@@ -2,7 +2,9 @@
 # VPC – same CIDR as before
 # ------------------------------------------------------------------
 resource "aws_vpc" "roboshop" {
-  cidr_block = "10.0.0.0/16"
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
   tags = {
     Name = "roboshop-vpc"
   }
@@ -43,7 +45,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "roboshop-public-${each.key}"
+    Name                                 = "roboshop-public-${each.key}"
+    "kubernetes.io/role/elb"             = "1"
+    "kubernetes.io/cluster/roboshop-eks" = "shared"
   }
 }
 
@@ -58,7 +62,9 @@ resource "aws_subnet" "private" {
   availability_zone = each.key
 
   tags = {
-    Name = "roboshop-private-${each.key}"
+    Name                                 = "roboshop-private-${each.key}"
+    "kubernetes.io/role/internal-elb"    = "1"
+    "kubernetes.io/cluster/roboshop-eks" = "shared"
   }
 }
 
