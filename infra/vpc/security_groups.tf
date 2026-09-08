@@ -54,7 +54,7 @@ resource "aws_security_group" "node_sg" {
 
   # Allow all traffic within the VPC CIDR (pods can talk to each other)
   ingress {
-    description = "VPC intra‑subnet traffic"
+    description = "VPC intra-subnet traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
