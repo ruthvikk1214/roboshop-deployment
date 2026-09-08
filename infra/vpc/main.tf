@@ -89,11 +89,30 @@ resource "aws_route_table_association" "public" {
 }
 
 # ------------------------------------------------------------------
-# PRIVATE ROUTE TABLE (no NAT – nodes stay private)
+# PRIVATE ROUTE TABLE (via NAT Gateway)
 # ------------------------------------------------------------------
+
+# Elastic IP for the NAT Gateway
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = { Name = "roboshop-nat-eip" }
+}
+
+# NAT Gateway in the first public subnet
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[local.selected_azs[0]].id
+  tags          = { Name = "roboshop-nat" }
+  depends_on    = [aws_internet_gateway.igw]
+}
+
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.roboshop.id
-  tags   = { Name = "roboshop-private-rt" }
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat.id
+  }
+  tags = { Name = "roboshop-private-rt" }
 }
 
 resource "aws_route_table_association" "private" {

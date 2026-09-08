@@ -51,7 +51,7 @@ module "eks" {
       desired_size           = 1
       max_size               = 1
       min_size               = 1
-      instance_types         = ["t3.micro"]
+      instance_types         = ["t3.medium"]
       capacity_type          = "SPOT"
       subnet_ids             = var.private_subnet_ids # can land in any of the AZs
       vpc_security_group_ids = var.node_security_group_ids
