@@ -154,6 +154,12 @@ jobs:
             --set defaultIngressClass=true
         working-directory: infra
 
+      - name: Wait for ALB Controller to be ready
+        run: |
+          echo "Waiting for ALB Controller webhook to become available..."
+          kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=120s
+          sleep 15
+
       - name: Deploy Roboshop Helm Chart
         run: |
           CLUSTER_NAME=$(terraform output -raw cluster_name)
