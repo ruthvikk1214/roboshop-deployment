@@ -40,10 +40,20 @@ jobs:
 
       - name: Destroy Route53 DNS (if exists)
         run: |
+          # Fetch ALB details if it still exists; use dummy values if not (destroy will still clean up state)
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
+            --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || echo "dummy.example.com")
+          ALB_ZONE=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
+            --query 'LoadBalancers[0].CanonicalHostedZoneId' --output text 2>/dev/null || echo "Z35SXDOTRQ7X7K")
           terraform init
-          terraform destroy -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" -auto-approve || echo "Route53 state not found or already destroyed"
+          terraform destroy \
+            -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" \
+            -var="alb_dns_name=$ALB_DNS" \
+            -var="alb_zone_id=$ALB_ZONE" \
+            -auto-approve || echo "Route53 state not found or already destroyed"
         working-directory: infra/route53
         continue-on-error: true
+
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

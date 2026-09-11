@@ -175,14 +175,27 @@ jobs:
 
       - name: Configure Route53 DNS
         run: |
-          echo "Waiting for ALB 'roboshop-alb' to be provisioned by the Ingress Controller..."
+          echo "Waiting for ALB 'roboshop-alb' to be provisioned..."
           sleep 15
           until aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} >/dev/null 2>&1; do
             echo "Still waiting for ALB..."
             sleep 10
           done
           aws elbv2 wait load-balancer-available --names roboshop-alb --region ${{ env.AWS_REGION }}
-          
+
+          # Look up ALB attributes using the CLI to avoid Terraform data-source issues
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
+            --query 'LoadBalancers[0].DNSName' --output text)
+          ALB_ZONE=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
+            --query 'LoadBalancers[0].CanonicalHostedZoneId' --output text)
+
+          echo "ALB DNS : $ALB_DNS"
+          echo "ALB Zone: $ALB_ZONE"
+
           terraform init
-          terraform apply -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" -auto-approve
+          terraform apply \
+            -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" \
+            -var="alb_dns_name=$ALB_DNS" \
+            -var="alb_zone_id=$ALB_ZONE" \
+            -auto-approve
         working-directory: infra/route53
