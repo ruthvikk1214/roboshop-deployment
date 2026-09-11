@@ -72,4 +72,9 @@ output "vpc_id" {
   value       = module.vpc.vpc_id
 }
 
+output "alb_controller_role_arn" {
+  description = "IAM Role ARN for the AWS Load Balancer Controller"
+  value       = module.eks.alb_controller_role_arn
+}
+
 
