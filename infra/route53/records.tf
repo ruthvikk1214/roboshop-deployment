@@ -23,6 +23,7 @@ provider "aws" {
 variable "hosted_zone_id" {
   description = "ID of the existing Route53 hosted zone for rk1214.in"
   type        = string
+  default     = "Z031906510N5GWM6MW07L"
 }
 
 variable "alb_dns_name" {
