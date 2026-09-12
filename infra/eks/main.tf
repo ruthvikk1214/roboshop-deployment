@@ -47,17 +47,16 @@ module "eks" {
   }
 
   # -------------------------------------------------------------
-  # Node group – still a single spot instance for cost‑optimisation
+  # Node group – scaling to 2 instances to bypass IP limits
   # -------------------------------------------------------------
   eks_managed_node_groups = {
     spot = {
-      desired_size           = 1
-      max_size               = 1
+      desired_size           = 2
+      max_size               = 2
       min_size               = 1
       instance_types         = ["t3.medium"]
       capacity_type          = "SPOT"
       subnet_ids             = var.private_subnet_ids # can land in any of the AZs
-      vpc_security_group_ids = var.node_security_group_ids
       ami_type               = "AL2_x86_64"
       # Optional: set a small root volume to keep costs down
       block_device_mappings = {
@@ -76,6 +75,19 @@ module "eks" {
     Environment = "educational"
     Owner       = "ruthvikk1214"
   }
+}
+
+# ------------------------------------------------------------------
+# Allow traffic from ALB Security Group to EKS Node Security Group
+# ------------------------------------------------------------------
+resource "aws_security_group_rule" "alb_to_nodes" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  source_security_group_id = var.alb_sg_id
+  security_group_id        = module.eks.node_security_group_id
+  description              = "Allow traffic from ALB"
 }
 
 # ------------------------------------------------------------------
