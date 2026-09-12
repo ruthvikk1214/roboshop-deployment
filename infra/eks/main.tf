@@ -51,13 +51,13 @@ module "eks" {
   # -------------------------------------------------------------
   eks_managed_node_groups = {
     spot = {
-      desired_size           = 2
-      max_size               = 2
-      min_size               = 1
-      instance_types         = ["t3.medium"]
-      capacity_type          = "SPOT"
-      subnet_ids             = var.private_subnet_ids # can land in any of the AZs
-      ami_type               = "AL2_x86_64"
+      desired_size   = 2
+      max_size       = 2
+      min_size       = 1
+      instance_types = ["t3.medium"]
+      capacity_type  = "SPOT"
+      subnet_ids     = var.private_subnet_ids # can land in any of the AZs
+      ami_type       = "AL2_x86_64"
       # Optional: set a small root volume to keep costs down
       block_device_mappings = {
         xvda = {
