@@ -30,6 +30,9 @@ spec:
         name: data
       spec:
         accessModes: [ "ReadWriteOnce" ]
+        {{- if .persistence.storageClass }}
+        storageClassName: {{ .persistence.storageClass }}
+        {{- end }}
         resources:
           requests:
             storage: {{ .persistence.size }}
