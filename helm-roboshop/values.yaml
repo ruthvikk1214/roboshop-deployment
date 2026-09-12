@@ -130,6 +130,7 @@ payment:
 frontend:
   name: frontend
   replicaCount: 1
+  runAsRoot: true
   image:
     repository: frontend
     tag: ""
@@ -162,7 +163,7 @@ mongodb:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: ""    # Uses cluster default storage class
+    storageClass: "gp2"    # Uses cluster default storage class
     mountPath: /data/db
   resources:
     requests:
@@ -187,7 +188,7 @@ mysql:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: ""
+    storageClass: "gp2"
     mountPath: /var/lib/mysql
   resources:
     requests:
@@ -211,7 +212,7 @@ redis:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: ""
+    storageClass: "gp2"
     mountPath: /data
   resources:
     requests:
@@ -238,7 +239,7 @@ rabbitmq:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: ""
+    storageClass: "gp2"
     mountPath: /var/lib/rabbitmq
   resources:
     requests:

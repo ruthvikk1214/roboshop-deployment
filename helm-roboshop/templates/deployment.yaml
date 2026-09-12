@@ -19,6 +19,10 @@ spec:
         app: {{ $svc.name }}
     spec:
       serviceAccountName: {{ $.Values.serviceAccount.name }}
+      {{- if $svc.runAsRoot }}
+      securityContext:
+        runAsUser: 0
+      {{- end }}
       containers:
         - name: {{ $svc.name }}
           image: "{{ $.Values.global.imageRegistry }}/{{ $svc.image.repository }}:{{ default $.Values.global.imageTag $svc.image.tag }}"
