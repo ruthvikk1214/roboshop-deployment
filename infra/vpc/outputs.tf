@@ -17,12 +17,6 @@ output "private_subnet_ids" {
   value       = [for s in aws_subnet.private : s.id]
 }
 
-# Output the node security group ID (already defined earlier in the file)
-output "node_sg_id" {
-  description = "Security group attached to EKS worker nodes"
-  value       = aws_security_group.node_sg.id
-}
-
 output "alb_sg_id" {
   description = "Security group attached to ALB"
   value       = aws_security_group.alb_sg.id

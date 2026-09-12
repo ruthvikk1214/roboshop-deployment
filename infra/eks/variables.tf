@@ -17,9 +17,7 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
-# New variable – attach the custom node security group
-variable "node_security_group_ids" {
-  description = "Security group IDs to attach to the worker nodes (e.g., the node SG defined in the VPC module)"
-  type        = list(string)
-  default     = []
+variable "alb_sg_id" {
+  description = "ALB security group ID to allow inbound traffic from"
+  type        = string
 }

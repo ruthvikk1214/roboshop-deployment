@@ -51,7 +51,7 @@ module "eks" {
   vpc_id                  = module.vpc.vpc_id
   private_subnet_ids      = module.vpc.private_subnet_ids
   public_subnet_ids       = module.vpc.public_subnet_ids
-  node_security_group_ids = [module.vpc.node_sg_id]
+  alb_sg_id               = module.vpc.alb_sg_id
 }
 
 # ------------------------------------------------------------------
