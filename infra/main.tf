@@ -77,4 +77,7 @@ output "alb_controller_role_arn" {
   value       = module.eks.alb_controller_role_arn
 }
 
-
+output "alb_sg_id" {
+  description = "ALB Security Group ID"
+  value       = module.vpc.alb_sg_id
+}

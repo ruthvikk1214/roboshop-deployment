@@ -165,12 +165,14 @@ jobs:
       - name: Deploy Roboshop Helm Chart
         run: |
           CLUSTER_NAME=$(terraform output -raw cluster_name)
+          ALB_SG_ID=$(terraform output -raw alb_sg_id)
           aws eks update-kubeconfig --name $CLUSTER_NAME --region ${{ env.AWS_REGION }}
           
           helm upgrade --install roboshop ../helm-roboshop \
             --namespace roboshop --create-namespace \
             --set ingress.enabled=true \
-            --set ingress.hosts[0].host=roboshop.rk1214.in
+            --set ingress.hosts[0].host=roboshop.rk1214.in \
+            --set "ingress.annotations.alb\.ingress\.kubernetes\.io/security-groups=$ALB_SG_ID"
         working-directory: infra
 
       - name: Configure Route53 DNS

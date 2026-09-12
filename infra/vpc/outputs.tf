@@ -22,3 +22,8 @@ output "node_sg_id" {
   description = "Security group attached to EKS worker nodes"
   value       = aws_security_group.node_sg.id
 }
+
+output "alb_sg_id" {
+  description = "Security group attached to ALB"
+  value       = aws_security_group.alb_sg.id
+}
