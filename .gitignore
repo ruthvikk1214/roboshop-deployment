@@ -56,3 +56,6 @@ Sanjeev_Sriram_Resume.pdf
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
+
+aws/
+awscliv2.zip

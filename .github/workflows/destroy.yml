@@ -23,32 +23,40 @@ jobs:
 
       - name: Destroy Helm Deployments & PVCs (if exists)
         run: |
-          # Try to connect to EKS. If it fails (cluster doesn't exist), gracefully exit this step.
+          # Connect to EKS. If the cluster is already gone, exit cleanly.
           aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }} || exit 0
           
           # 1. Clean up Monitoring Stack (Prometheus & Grafana)
+          echo "Uninstalling monitoring stack..."
           helm uninstall monitoring-stack -n monitoring || echo "Monitoring release not found"
           kubectl delete pvc --all -n monitoring || echo "No monitoring PVCs found"
           kubectl delete namespace monitoring || echo "Monitoring namespace not found"
 
           # 2. Clean up Roboshop Microservices
+          echo "Uninstalling Roboshop application..."
           helm uninstall roboshop -n roboshop || echo "Roboshop Helm release not found"
           kubectl delete pvc --all -n roboshop || echo "No Roboshop PVCs found"
-          kubectl delete namespace roboshop || echo "Roboshop namespace not found"
           
-          # Wait a minute to give the AWS Load Balancer Controller time to delete the ALB.
-          # If we don't wait, Terraform destroy might fail because the VPC is still in use by the ALB.
-          echo "Waiting 60 seconds for ALB cleanup..."
-          sleep 60
+          # 3. Actively wait for AWS Load Balancer Controller to remove the ALB
+          echo "Waiting for AWS ALB 'roboshop-alb' to be deleted by controller..."
+          while aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} >/dev/null 2>&1; do
+            echo "ALB still provisioning teardown in AWS, waiting 10s..."
+            sleep 10
+          done
+          echo "ALB successfully removed from AWS."
+
+          # 4. Clean up namespace after the ALB has been deleted
+          kubectl delete namespace roboshop || echo "Roboshop namespace not found"
         continue-on-error: true
 
       - name: Destroy Route53 DNS (if exists)
         run: |
-          # Fetch ALB details if it still exists; use dummy values if not (destroy will still clean up state)
+          # Fetch ALB details if it still exists; use dummy values if already removed
           ALB_DNS=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
             --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || echo "dummy.example.com")
           ALB_ZONE=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
             --query 'LoadBalancers[0].CanonicalHostedZoneId' --output text 2>/dev/null || echo "Z35SXDOTRQ7X7K")
+          
           terraform init
           terraform destroy \
             -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" \
