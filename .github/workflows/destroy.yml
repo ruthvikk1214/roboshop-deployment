@@ -21,16 +21,20 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Destroy Helm Deployments (if exists)
+      - name: Destroy Helm Deployments & PVCs (if exists)
         run: |
           # Try to connect to EKS. If it fails (cluster doesn't exist), gracefully exit this step.
           aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }} || exit 0
           
-          # Try to uninstall the helm chart
-          helm uninstall roboshop -n roboshop || echo "Helm release not found"
-          
-          # Delete PVCs to ensure AWS EBS volumes are properly destroyed before the cluster dies
-          kubectl delete pvc --all -n roboshop || echo "No PVCs found"
+          # 1. Clean up Monitoring Stack (Prometheus & Grafana)
+          helm uninstall monitoring-stack -n monitoring || echo "Monitoring release not found"
+          kubectl delete pvc --all -n monitoring || echo "No monitoring PVCs found"
+          kubectl delete namespace monitoring || echo "Monitoring namespace not found"
+
+          # 2. Clean up Roboshop Microservices
+          helm uninstall roboshop -n roboshop || echo "Roboshop Helm release not found"
+          kubectl delete pvc --all -n roboshop || echo "No Roboshop PVCs found"
+          kubectl delete namespace roboshop || echo "Roboshop namespace not found"
           
           # Wait a minute to give the AWS Load Balancer Controller time to delete the ALB.
           # If we don't wait, Terraform destroy might fail because the VPC is still in use by the ALB.
@@ -53,7 +57,6 @@ jobs:
             -auto-approve || echo "Route53 state not found or already destroyed"
         working-directory: infra/route53
         continue-on-error: true
-
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

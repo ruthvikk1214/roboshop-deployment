@@ -132,6 +132,20 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" -auto-approve
         working-directory: infra
+      
+      - name: Deploy Prometheus & Grafana Monitoring Stack
+        run: |
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          aws eks update-kubeconfig --name $CLUSTER_NAME --region ${{ env.AWS_REGION }}
+
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+          helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --create-namespace \
+            -f ../helm-roboshop/monitoring-values.yaml
+        working-directory: infra
 
       - name: Install AWS Load Balancer Controller
         run: |
