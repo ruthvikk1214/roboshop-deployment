@@ -147,6 +147,44 @@ jobs:
             -f ../helm-roboshop/monitoring-values.yaml
         working-directory: infra
 
+      - name: Deploy ELK Stack (Logging)
+        run: |
+          CLUSTER_NAME=$(terraform output -raw cluster_name)
+          aws eks update-kubeconfig --name $CLUSTER_NAME --region ${{ env.AWS_REGION }}
+
+          helm repo add elastic https://helm.elastic.co
+          helm repo update
+
+          # 1. Elasticsearch (Single-replica, 512m heap, ephemeral emptyDir storage)
+          helm upgrade --install elasticsearch elastic/elasticsearch \
+            --namespace logging \
+            --create-namespace \
+            --set replicas=1 \
+            --set minimumMasterNodes=1 \
+            --set esJavaOpts="-Xmx512m -Xms512m" \
+            --set resources.requests.cpu="100m" \
+            --set resources.requests.memory="700Mi" \
+            --set resources.limits.cpu="500m" \
+            --set resources.limits.memory="1.2Gi" \
+            --set persistence.enabled=false
+
+          # 2. Kibana UI
+          helm upgrade --install kibana elastic/kibana \
+            --namespace logging \
+            --create-namespace \
+            --set resources.requests.cpu="50m" \
+            --set resources.requests.memory="256Mi" \
+            --set resources.limits.cpu="300m" \
+            --set resources.limits.memory="512Mi"
+
+          # 3. Filebeat DaemonSet (ships container logs from both worker nodes)
+          helm upgrade --install filebeat elastic/filebeat \
+            --namespace logging \
+            --create-namespace \
+            --set daemonset.resources.requests.memory="64Mi" \
+            --set daemonset.resources.limits.memory="128Mi"
+        working-directory: infra
+
       - name: Install AWS Load Balancer Controller
         run: |
           CLUSTER_NAME=$(terraform output -raw cluster_name)
@@ -161,7 +199,6 @@ jobs:
 
           helm repo add eks https://aws.github.io/eks-charts
           helm repo update
-
 
           helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
             --namespace kube-system \
