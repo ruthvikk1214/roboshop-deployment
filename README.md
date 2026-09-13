@@ -1,608 +1,956 @@
-# Roboshop Docker Project
+# 🚀 RoboShop - End-to-End DevSecOps Deployment Platform
 
-This repository contains the Dockerized configuration for the **Roboshop** application, a multi-container microservices application.
+An end-to-end **DevOps and DevSecOps implementation** for deploying the RoboShop microservices application using Docker, Terraform, Kubernetes, Helm, GitHub Actions, Prometheus, Grafana, EFK Stack, SonarQube, and Trivy.
 
-## Component Architecture
+This project demonstrates a complete production-style software delivery lifecycle including:
 
-The application consists of the following components:
-
-- **Frontend**: The user interface. Routes requests to `catalogue`, `user`, and other backend services.
-- **MongoDB**: Database store for product catalog details.
-- **Redis**: In-memory data store for user sessions and cart details.
-- **Catalogue**: Microservice handling catalog-related requests (depends on MongoDB).
-- **User**: Microservice managing user profiles and logins (depends on Redis).
-- **Cart**: Microservice managing user carts (depends on Redis).
-- **Shipping**: Microservice handling shipping calculations.
-
----
-
-## Networking and Inter-Component Communication
-
-> [!IMPORTANT]
-> **Custom Bridge Network Requirement**
-> To allow secure and seamless communication between the microservices, a **custom bridge network** must be used.
->
-> **Why is this necessary?**
-> By default, containers on the default bridge network cannot resolve each other by container/service name via DNS. Using a custom bridge network enables Docker's automatic DNS resolution, allowing containers to connect to each other using their container name (e.g., `mongodb`, `redis`) as the hostname.
->
-> In the `compose.yaml` configuration, this custom bridge network is defined under the `networks` block:
-> ```yaml
-> networks:
->   default:
->     name: roboshop
-> ```
-> 
-> If you are running the containers individually (without Docker Compose), you must first create this network manually before launching the containers:
-> ```bash
-> docker network create --driver bridge roboshop
-> ```
-> And connect each container to it:
-> ```bash
-> docker run --network roboshop ...
-> ```
+* Infrastructure as Code
+* Containerization
+* CI/CD Automation
+* Manual Approval Gates
+* Kubernetes Orchestration
+* Helm Deployments
+* DNS and Service Discovery
+* Monitoring and Observability
+* Centralized Logging
+* Shift-Left Security
+* SAST
+* Container Image Vulnerability Scanning
 
 ---
 
-## Getting Started
+# 📌 Project Overview
 
-### Install Docker
+RoboShop is a microservices-based e-commerce application consisting of multiple frontend, backend, database, cache, and messaging services.
 
-If you are running on a RHEL 9 EC2 instance, you can install Docker and the required plugins using the following commands:
-
-```bash
-sudo dnf -y install dnf-plugins-core
-sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
-sudo dnf install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker ec2-user
-```
-
-> [!NOTE]
-> After running the commands, you may need to log out and log back in (or run `newgrp docker`) for the group changes to take effect so that you can run Docker commands without `sudo`.
-
-### Using Docker Compose
-To build and start the components together:
-```bash
-docker compose up -d --build
-```
-# Increase Disk Space on RHEL 9.7 EC2 (LVM)
-
-> **Note:** While creating the EC2 instance, choose **50 GB** as the root volume size instead of the default size. On RHEL 9.x, the filesystem is **not automatically expanded** to use the entire EBS volume, so the following steps are required.
-
-## Verify the current disk layout
-
-```bash
-lsblk
-df -h
-sudo vgs
-sudo lvs
-```
-
-## Install `growpart`
-
-```bash
-sudo dnf install -y cloud-utils-growpart
-```
-
-## Extend the root partition
-
-```bash
-sudo growpart /dev/nvme0n1 4
-```
-
-> Replace `4` with your root partition number if it is different.
-
-## Resize the LVM Physical Volume
-
-```bash
-sudo pvresize /dev/nvme0n1p4
-```
-
-## Verify free space in the Volume Group
-
-```bash
-sudo vgs
-```
-
-`VFree` should now show the newly available space.
-
-## Extend the `/var` Logical Volume
-
-Since Docker stores images and containers under `/var/lib/docker`, it's recommended to extend the `/var` logical volume.
-
-Use all available free space:
-
-```bash
-sudo lvextend -r -l +100%FREE /dev/RootVG/varVol
-```
-
-Or extend by a specific size (example: 20 GB):
-
-```bash
-sudo lvextend -r -L +20G /dev/RootVG/varVol
-```
-
-## Verify
-
-```bash
-df -h
-```
-
-The `/var` filesystem should now reflect the increased size.
+This project focuses on implementing an end-to-end DevOps and DevSecOps workflow where infrastructure, application deployment, security, monitoring, and logging are automated using modern cloud-native tools.
 
 ---
 
-### Why is this required?
+# ✨ Key Features
 
-Although the EC2 instance is created with a **50 GB EBS volume**, RHEL 9.x initially creates a smaller LVM partition (around 20 GB by default). The remaining space is left unallocated and must be manually extended before Docker workloads can use it.
-
----
-
-# Container Size Optimization
-
-To ensure fast deployment and minimal resource usage, the container configurations in this repository have been optimized:
-
-* **Minimal Base Images:** Used Alpine-based Docker images (such as `node:20-alpine`) to significantly decrease the overall container image size and reduce the security vulnerability footprint compared to standard base images.
-* **Multi-Stage Builds:** Implemented multi-stage builds (e.g., in the `catalogue` service) to separate the build environment from the final execution environment. This ensures that build tools and temporary dependencies are not included in the final production images, resulting in highly lightweight containers.
-
----
-
-# Troubleshooting & Key Learnings
-
-During the development and containerization of the RoboShop microservices application, I encountered several real-world issues. Below are the major challenges, root causes, and their resolutions.
+* 🐳 Docker Containerization
+* 🏗️ Terraform Infrastructure as Code
+* ☸️ Kubernetes Orchestration
+* ⛵ Helm-based Kubernetes Deployments
+* 🔄 GitHub Actions CI/CD
+* 🛑 Manual Approval Gate
+* 🔐 SonarQube SAST
+* 🛡️ Trivy Image Scanning
+* 🔍 Shift-Left Security
+* 🌐 DNS and Service Discovery
+* 📊 Prometheus Monitoring
+* 📈 Grafana Dashboards
+* 📜 EFK Centralized Logging
 
 ---
 
-## 1. Docker Build Context Issues
-
-### Problem
-
-Docker failed to locate the `Dockerfile` or application source files during image build.
-
-### Root Cause
-
-The `context` property was not specified correctly in `compose.yaml`, causing Docker to search in the project root.
-
-### Solution
-
-```yaml
-build:
-  context: ./catalogue
-  dockerfile: dockerfile
-```
-
-**Learning:** Docker can only access files within the specified build context.
-
----
-
-## 2. COPY Instruction Failures
-
-### Problem
-
-```
-COPY requirements.txt failed
-```
-
-### Root Cause
-
-Required files were outside the Docker build context or missing.
-
-### Solution
-
-* Verified project structure.
-* Corrected the build context.
-* Ensured all required files existed before building.
-
----
-
-## 3. Shipping Service Build Failure
-
-### Problem
-
-```
-Unable to find main class
-```
-
-### Root Cause
-
-* Incorrect Dockerfile configuration.
-* Application source wasn't copied correctly.
-
-### Solution
-
-```dockerfile
-COPY pom.xml .
-COPY src ./src
-RUN mvn clean package
-```
-
-**Learning:** Spring Boot projects require both `pom.xml` and the complete `src` directory.
-
----
-
-## 4. MySQL Container Initialization Failure
-
-### Problem
-
-```
-Database is uninitialized and password option is not specified
-```
-
-### Root Cause
-
-The MySQL image expects the root password through Docker Compose environment variables.
-
-### Solution
-
-```yaml
-mysql:
-  environment:
-    MYSQL_ROOT_PASSWORD: Roboshop@1
-```
-
-**Learning:** Environment variables defined in `docker-compose.yml` override image configuration and are the recommended approach.
-
----
-
-## 5. Payment Container Exiting Immediately
-
-### Problem
-
-The payment container exited with status code `0` immediately after startup.
-
-### Root Cause
-
-Missing dependencies and incorrect environment variable configuration.
-
-### Solution
-
-Configured:
-
-* RabbitMQ
-* Cart Service
-* User Service
-* Required environment variables
-
-using Docker Compose.
-
----
-
-## 6. Frontend Could Not Reach Backend Services
-
-### Problem
-
-```
-host not found in upstream "payment"
-```
-
-### Root Cause
-
-The backend container was unavailable when Nginx started.
-
-### Solution
-
-* Fixed backend services.
-* Rebuilt the frontend image.
-* Verified Nginx reverse proxy configuration.
-
----
-
-## 7. Redis Connectivity Issues
-
-### Problem
-
-```
-ECONNREFUSED 127.0.0.1:6379
-```
-
-### Root Cause
-
-Application attempted to connect to localhost instead of the Redis container.
-
-### Solution
-
-Configured the Redis hostname as:
-
-```
-redis
-```
-
-instead of
-
-```
-localhost
-```
-
-**Learning:** Containers communicate using Docker DNS service names.
-
----
-
-## 8. MongoDB Connectivity
-
-### Problem
-
-Catalogue service failed health checks.
-
-### Solution
-
-Verified service connectivity using:
-
-```bash
-curl http://catalogue:8080/health
-```
-
-Expected response:
-
-```json
-{
-  "app": "OK",
-  "mongo": true
-}
+# 🏗️ End-to-End Architecture
+
+```text
+                         Developer
+                             │
+                             ▼
+                       GitHub Repository
+                             │
+                             ▼
+                     GitHub Actions CI/CD
+                             │
+                             ▼
+                       Code Checkout
+                             │
+                             ▼
+                   SonarQube SAST Scan
+                       (Shift Left)
+                             │
+                             ▼
+                     Quality Gate Check
+                             │
+                             ▼
+                       Docker Build
+                             │
+                             ▼
+                    Trivy Image Scan
+                       (Shift Left)
+                             │
+                             ▼
+                    Terraform Validation
+                             │
+                             ▼
+                   Manual Approval Gate
+                             │
+                             ▼
+                 Terraform Infrastructure
+                             │
+                             ▼
+                    Kubernetes Cluster
+                             │
+                             ▼
+                       Helm Deploy
+                             │
+                             ▼
+                  RoboShop Microservices
+                             │
+              ┌──────────────┴──────────────┐
+              │                             │
+              ▼                             ▼
+         Prometheus                      EFK Stack
+         Monitoring                   Centralized Logs
+              │                             │
+              ▼                             ▼
+           Grafana                        Kibana
+          Dashboards                 Log Visualization
 ```
 
 ---
 
-## 9. Docker Compose `depends_on`
+# 📂 Repository Structure
 
-### Observation
-
-`depends_on` only controls startup order.
-
-It **does not wait** until a service is healthy.
-
-**Learning:** For production deployments, Docker Health Checks should be implemented.
-
----
-
-## 10. Docker Cache Issues
-
-### Problem
-
-Even after modifying source files, containers continued using older configurations.
-
-### Solution
-
-Performed a complete rebuild:
-
-```bash
-docker compose down
-docker builder prune -af
-docker compose build --no-cache
-docker compose up -d
-```
-
-**Learning:** Docker aggressively caches image layers.
-
----
-
-## 11. Container Debugging Commands
-
-Frequently used commands during troubleshooting:
-
-```bash
-docker ps
-docker ps -a
-docker images
-docker logs <container>
-docker compose logs <service>
-docker exec -it <container> sh
-docker inspect <container>
+```text
+roboshop-deployment
+│
+├── .github/
+│   └── workflows/
+│       └── CI/CD pipeline configurations
+│
+├── docker/
+│   └── Dockerfiles for RoboShop services
+│
+├── helm-roboshop/
+│   └── Helm charts for Kubernetes deployment
+│
+├── infra/
+│   └── Terraform infrastructure configurations
+│
+├── scripts/
+│   └── Deployment and automation scripts
+│
+├── compose.yaml
+│
+├── implementation_plan.md
+│
+└── README.md
 ```
 
 ---
 
-## 12. API Verification Using curl
+# 🐳 Docker Containerization
 
-Verified inter-service communication directly inside containers.
+Each RoboShop microservice is containerized using Docker.
 
-Examples:
+The application consists of services such as:
 
-```bash
-curl http://catalogue:8080/health
-
-curl http://catalogue:8080/products
-
-curl http://cart:8080/add/ruthvik/STAN-1/1
-```
-
-This helped isolate frontend issues from backend issues.
-
----
-
-## 13. Browser Network Debugging
-
-Used Firefox Developer Tools to inspect:
-
-* API requests
-* HTTP status codes
-* Request headers
-* Response payloads
-
-This made it easier to identify backend routing problems.
-
----
-
-## 14. Docker Networking
-
-Verified communication between containers using Docker DNS.
-
-Example:
-
-```
-cart  --->  http://catalogue:8080
-```
-
-instead of using IP addresses.
-
-**Learning:** Docker automatically provides service discovery using container names.
-
----
-
-## 15. Nginx Reverse Proxy
-
-Configured Nginx as an API gateway for all backend services.
-
-Example:
-
-```nginx
-location /api/catalogue/ {
-    proxy_pass http://catalogue:8080/;
-}
-
-location /api/cart/ {
-    proxy_pass http://cart:8080/;
-}
-
-location /api/payment/ {
-    proxy_pass http://payment:8080/;
-}
-```
-
----
-
-# Useful Debugging Workflow
-
-Whenever a service failed, I followed the same troubleshooting process:
-
-1. Check container status
-
-```bash
-docker ps -a
-```
-
-2. View logs
-
-```bash
-docker logs <container>
-```
-
-3. Verify environment variables
-
-```bash
-docker exec -it <container> env
-```
-
-4. Enter the container
-
-```bash
-docker exec -it <container> sh
-```
-
-5. Test service connectivity
-
-```bash
-curl http://service-name:port/health
-```
-
-6. Inspect browser network requests
-
-7. Rebuild images if configuration changed
-
-```bash
-docker compose build --no-cache
-docker compose up -d
-```
-
----
-
-# Skills Demonstrated
-
-* Docker & Docker Compose
-* Container Size Optimization (Minimal Alpine images, Multi-Stage builds)
-* Docker Networking
-* Docker Image Creation
-* Multi-Container Applications
-* Nginx Reverse Proxy
-* Spring Boot Containerization
-* Python Containerization
-* Node.js Containerization
+* Frontend
+* Catalogue
+* User
+* Cart
+* Shipping
+* Payment
 * MongoDB
 * MySQL
 * Redis
 * RabbitMQ
-* Linux
-* REST API Debugging
+
+Docker provides:
+
+* Consistent application environments
+* Service isolation
+* Portability
+* Reproducible builds
+* Simplified deployments
+
+---
+
+# 🚀 Running the Application with Docker Compose
+
+## Prerequisites
+
+Install:
+
+* Docker
+* Docker Compose
+
+Verify the installation:
+
+```bash
+docker --version
+docker compose version
+```
+
+## Clone the Repository
+
+```bash
+git clone https://github.com/ruthvikk1214/roboshop-deployment.git
+cd roboshop-deployment
+```
+
+## Build and Start
+
+```bash
+docker compose up -d --build
+```
+
+Verify containers:
+
+```bash
+docker ps
+```
+
+View logs:
+
+```bash
+docker compose logs
+```
+
+Stop the application:
+
+```bash
+docker compose down
+```
+
+---
+
+# 🌐 DNS and Service Discovery
+
+Microservices require reliable communication between services.
+
+Instead of hardcoding IP addresses, the project uses DNS-based service discovery.
+
+## Docker DNS
+
+Docker Compose automatically provides DNS resolution between services.
+
+Services communicate using service names.
+
+Example:
+
+```text
+catalogue
+redis
+mongodb
+mysql
+rabbitmq
+```
+
+For example:
+
+```text
+Cart Service
+     │
+     ▼
+http://catalogue:8080
+```
+
+Redis:
+
+```text
+redis:6379
+```
+
+MongoDB:
+
+```text
+mongodb
+```
+
+---
+
+# ☸️ Kubernetes DNS
+
+Kubernetes provides internal DNS-based service discovery.
+
+Services can communicate using Kubernetes Service names.
+
+Example:
+
+```text
+catalogue
+catalogue.default
+catalogue.default.svc.cluster.local
+```
+
+A Kubernetes service provides a stable DNS endpoint even when Pods are recreated.
+
+Example:
+
+```text
+Frontend
+    │
+    ▼
+catalogue-service
+    │
+    ▼
+Catalogue Pods
+```
+
+This enables dynamic communication between microservices without relying on Pod IP addresses.
+
+---
+
+# 🏗️ Infrastructure Provisioning with Terraform
+
+Terraform is used to provision and manage infrastructure using Infrastructure as Code.
+
+Benefits include:
+
+* Repeatable infrastructure
+* Version-controlled infrastructure
+* Automated provisioning
+* Consistent environments
+* Reduced manual configuration
+
+## Terraform Workflow
+
+Initialize Terraform:
+
+```bash
+terraform init
+```
+
+Validate configuration:
+
+```bash
+terraform validate
+```
+
+Preview changes:
+
+```bash
+terraform plan
+```
+
+Apply infrastructure:
+
+```bash
+terraform apply
+```
+
+Destroy infrastructure:
+
+```bash
+terraform destroy
+```
+
+---
+
+# ☸️ Kubernetes Deployment
+
+RoboShop is deployed on Kubernetes for container orchestration.
+
+Kubernetes provides:
+
+* Container orchestration
+* Self-healing
+* Service discovery
+* Scaling
+* Load balancing
+* Rolling updates
+
+---
+
+# ⛵ Helm Deployment
+
+Helm is used to manage and deploy Kubernetes applications.
+
+The Helm charts are located in:
+
+```text
+helm-roboshop/
+```
+
+## Install Application
+
+```bash
+helm install roboshop .
+```
+
+Check releases:
+
+```bash
+helm list
+```
+
+Check pods:
+
+```bash
+kubectl get pods
+```
+
+Upgrade deployment:
+
+```bash
+helm upgrade roboshop .
+```
+
+Uninstall deployment:
+
+```bash
+helm uninstall roboshop
+```
+
+Helm simplifies Kubernetes deployments by packaging related Kubernetes resources into reusable charts.
+
+---
+
+# 🔄 CI/CD Pipeline
+
+GitHub Actions is used to automate the CI/CD workflow.
+
+The pipeline automates:
+
+* Code checkout
+* Code validation
+* Security scanning
+* Docker image building
+* Container image scanning
+* Terraform validation
+* Infrastructure deployment
+* Manual approval
+* Kubernetes deployment
+* Helm deployment
+
+---
+
+# 🔐 Shift-Left Security
+
+This project follows the **Shift-Left Security** approach.
+
+Security checks are performed early in the software development lifecycle instead of waiting until after deployment.
+
+```text
+Traditional Approach
+
+Code
+ │
+ ▼
+Build
+ │
+ ▼
+Deploy
+ │
+ ▼
+Security Scan
+
+
+Shift-Left Approach
+
+Code
+ │
+ ▼
+Security Scan
+ │
+ ▼
+Build
+ │
+ ▼
+Security Scan
+ │
+ ▼
+Deploy
+```
+
+This helps identify vulnerabilities earlier and reduces the risk of deploying insecure applications.
+
+---
+
+# 🔍 SAST - SonarQube
+
+SonarQube is integrated into the CI pipeline for Static Application Security Testing (SAST).
+
+SonarQube analyzes source code and helps identify:
+
+* Security vulnerabilities
+* Bugs
+* Code smells
+* Security hotspots
+* Code quality issues
+* Technical debt
+
+---
+
+# 🚦 SonarQube Quality Gate
+
+After the SonarQube analysis, the pipeline checks the Quality Gate.
+
+```text
+Code
+ │
+ ▼
+SonarQube Scan
+ │
+ ▼
+Quality Gate
+ │
+ ├── PASS ────► Continue Pipeline
+ │
+ └── FAIL ────► Stop Pipeline
+```
+
+This prevents low-quality or insecure code from progressing through the pipeline.
+
+---
+
+# 🛡️ Trivy Image Scanning
+
+Trivy is used to scan Docker images for vulnerabilities.
+
+The scan checks for:
+
+* Operating system vulnerabilities
+* Dependency vulnerabilities
+* Known CVEs
+* Critical vulnerabilities
+* High severity vulnerabilities
+
+Example workflow:
+
+```text
+Docker Build
+     │
+     ▼
+Docker Image
+     │
+     ▼
+Trivy Scan
+     │
+     ├── PASS ────► Continue Pipeline
+     │
+     └── FAIL ────► Stop Pipeline
+```
+
+This prevents vulnerable container images from being deployed.
+
+---
+
+# 🔐 DevSecOps Security Workflow
+
+```text
+Developer
+    │
+    ▼
+Git Push
+    │
+    ▼
+GitHub Actions
+    │
+    ▼
+Code Checkout
+    │
+    ▼
+SonarQube SAST
+    │
+    ▼
+Quality Gate
+    │
+    ▼
+Docker Build
+    │
+    ▼
+Trivy Image Scan
+    │
+    ▼
+Terraform Validation
+    │
+    ▼
+Manual Approval Gate
+    │
+    ▼
+Terraform Apply
+    │
+    ▼
+Kubernetes
+    │
+    ▼
+Helm Deployment
+```
+
+---
+
+# 🛑 Manual Approval Gate
+
+A manual approval gate is included before critical deployment stages.
+
+This provides human validation before infrastructure or production changes are applied.
+
+```text
+CI Pipeline
+     │
+     ▼
+Security Checks
+     │
+     ▼
+Build
+     │
+     ▼
+Infrastructure Validation
+     │
+     ▼
+Manual Approval
+     │
+     ├── Approved ────► Deploy
+     │
+     └── Rejected ────► Stop Pipeline
+```
+
+Benefits:
+
+* Prevent accidental deployments
+* Human validation for critical changes
+* Additional production safety
+* Controlled infrastructure changes
+
+---
+
+# 📊 Monitoring and Observability
+
+The project uses:
+
+* Prometheus
+* Grafana
+
+---
+
+# 📈 Prometheus Monitoring
+
+Prometheus is used to collect and store metrics from the infrastructure and Kubernetes workloads.
+
+Metrics include:
+
+* CPU usage
+* Memory usage
+* Pod health
+* Container metrics
+* Node metrics
+* Application metrics
+* Resource utilization
+
+Prometheus stores metrics as time-series data.
+
+---
+
+# 📊 Grafana Dashboards
+
+Grafana is used to visualize metrics collected by Prometheus.
+
+Grafana provides dashboards for:
+
+* Kubernetes cluster health
+* Node utilization
+* Pod utilization
+* CPU usage
+* Memory usage
+* Infrastructure metrics
+* Application performance
+
+---
+
+# 📊 Monitoring Architecture
+
+```text
+                   Kubernetes Cluster
+                           │
+                           ▼
+            ┌──────────────────────────────┐
+            │                              │
+            ▼                              ▼
+          Nodes                            Pods
+            │                              │
+            └──────────────┬───────────────┘
+                           │
+                           ▼
+                      Prometheus
+                    Metrics Collection
+                           │
+                           ▼
+                       Grafana
+                     Dashboards
+```
+
+---
+
+# 📜 Centralized Logging - EFK Stack
+
+The project uses the EFK Stack for centralized logging.
+
+EFK consists of:
+
+* Elasticsearch
+* Fluent Bit
+* Kibana
+
+---
+
+# 📥 Fluent Bit
+
+Fluent Bit collects logs from Kubernetes containers and Pods.
+
+Responsibilities include:
+
+* Collect container logs
+* Collect Kubernetes logs
+* Parse logs
+* Forward logs to Elasticsearch
+
+---
+
+# 🔎 Elasticsearch
+
+Elasticsearch is used for:
+
+* Centralized log storage
+* Log indexing
+* Log searching
+* Log retention
+
+---
+
+# 📊 Kibana
+
+Kibana provides log visualization and analysis.
+
+Kibana can be used for:
+
+* Searching logs
+* Troubleshooting issues
+* Visualizing application logs
+* Analyzing errors
+* Investigating incidents
+
+---
+
+# 📜 EFK Architecture
+
+```text
+                Kubernetes Pods
+                      │
+                      ▼
+               Application Logs
+                      │
+                      ▼
+                  Fluent Bit
+                Log Collection
+                      │
+                      ▼
+                Elasticsearch
+                  Log Storage
+                      │
+                      ▼
+                    Kibana
+              Log Visualization
+```
+
+---
+
+# 📊 Observability Stack
+
+| Tool          | Purpose                  |
+| ------------- | ------------------------ |
+| Prometheus    | Metrics collection       |
+| Grafana       | Metrics visualization    |
+| Fluent Bit    | Log collection           |
+| Elasticsearch | Log storage and indexing |
+| Kibana        | Log visualization        |
+
+---
+
+# 🛠️ Technology Stack
+
+| Category                   | Technology                            |
+| -------------------------- | ------------------------------------- |
+| Version Control            | Git, GitHub                           |
+| CI/CD                      | GitHub Actions                        |
+| Manual Gate                | GitHub Environments / Manual Approval |
+| Containerization           | Docker                                |
+| Container Orchestration    | Kubernetes                            |
+| Kubernetes Package Manager | Helm                                  |
+| Service Discovery          | Docker DNS, Kubernetes DNS            |
+| Infrastructure as Code     | Terraform                             |
+| Cloud Provider             | AWS                                   |
+| Monitoring                 | Prometheus                            |
+| Visualization              | Grafana                               |
+| Centralized Logging        | EFK Stack                             |
+| Log Collection             | Fluent Bit                            |
+| Log Storage                | Elasticsearch                         |
+| Log Visualization          | Kibana                                |
+| SAST                       | SonarQube                             |
+| Vulnerability Scanning     | Trivy                                 |
+| Security Strategy          | Shift-Left Security                   |
+| Web Server                 | Nginx                                 |
+| Database                   | MongoDB, MySQL                        |
+| Cache                      | Redis                                 |
+| Messaging                  | RabbitMQ                              |
+| Operating System           | Linux                                 |
+
+---
+
+# 🧠 Key DevOps and DevSecOps Concepts
+
+This project demonstrates hands-on experience with:
+
+## DevOps
+
+* Docker
+* Docker Compose
+* Terraform
+* AWS
+* Kubernetes
+* Helm
+* CI/CD
+* GitHub Actions
+* DNS
 * Service Discovery
-* Log Analysis
-* Browser Network Debugging
+* Monitoring
+* Observability
+* Centralized Logging
+
+## DevSecOps
+
+* Shift-Left Security
+* SAST
+* SonarQube
+* Quality Gates
+* Trivy
+* Container Image Scanning
+* Vulnerability Detection
+* CI/CD Security Gates
+* Manual Approval Gates
 
 ---
 
-# Lessons Learned
+# 🗺️ Project Roadmap
 
-* Docker build context is one of the most common causes of build failures.
-* `depends_on` controls startup order but **does not** guarantee service readiness.
-* Docker DNS enables service-to-service communication using container names.
-* Browser Developer Tools are invaluable for debugging frontend-backend interactions.
-* `docker logs`, `docker exec`, and `curl` are essential tools for troubleshooting microservices.
-* Docker image cache can cause outdated configurations to persist; rebuilding with `--no-cache` resolves such issues.
-* Effective microservice debugging involves isolating each service and validating connectivity step by step.
-* A systematic troubleshooting approach significantly reduces debugging time.
+## Phase 1 - Containerization
+
+* [x] Containerize RoboShop microservices
+* [x] Configure Docker networking
+* [x] Implement Docker Compose
+* [x] Implement DNS-based service discovery
+
+## Phase 2 - Infrastructure as Code
+
+* [x] Provision infrastructure using Terraform
+* [x] Automate infrastructure deployment
+
+## Phase 3 - Kubernetes
+
+* [x] Deploy application on Kubernetes
+* [x] Configure Kubernetes Services
+* [x] Configure Kubernetes DNS
+* [x] Manage deployments using Helm
+
+## Phase 4 - CI/CD
+
+* [x] Implement GitHub Actions
+* [x] Automate infrastructure workflows
+* [x] Add Manual Approval Gate
+
+## Phase 5 - Monitoring
+
+* [x] Deploy Prometheus
+* [x] Configure Grafana
+* [x] Monitor Kubernetes workloads
+
+## Phase 6 - Centralized Logging
+
+* [x] Deploy EFK Stack
+* [x] Configure Fluent Bit
+* [x] Configure Elasticsearch
+* [x] Configure Kibana
+* [x] Centralize Kubernetes logs
+
+## Phase 7 - DevSecOps
+
+* [x] Integrate SonarQube SAST
+* [x] Configure Quality Gates
+* [x] Integrate Trivy Image Scanning
+* [x] Implement Shift-Left Security
 
 ---
 
-# Docker Best Practices
+# 🎯 Complete Project Workflow
 
-To ensure secure, lightweight, and performant container deployments, follow these Docker best practices:
-
-### 1. Use Specific and Minimal Base Images
-* **Avoid `latest`:** Always pin base image versions (e.g., `node:20-alpine` instead of `node`) to ensure build reproducibility.
-* **Use Alpine/Slim:** Use minimal distributions like `alpine` or `slim` to reduce the image size, decrease the attack surface, and speed up deployments.
-
-### 2. Leverage Build Cache (Order of Instructions)
-* Copy dependency files (e.g., `package.json`, `pom.xml`, `requirements.txt`) first and run installation commands before copying the rest of the application source code.
-* This ensures that Docker reuses cached layers for dependencies unless they explicitly change.
-
-```dockerfile
-# Good caching practice
-COPY package.json .
-RUN npm install
-COPY . .
+```text
+Developer
+    │
+    ▼
+GitHub Repository
+    │
+    ▼
+GitHub Actions CI/CD
+    │
+    ├── Code Checkout
+    │
+    ├── SAST Scan
+    │      │
+    │      ▼
+    │   SonarQube
+    │
+    ├── Quality Gate
+    │
+    ├── Docker Build
+    │
+    ├── Trivy Image Scan
+    │
+    ├── Terraform Validation
+    │
+    ├── Manual Approval
+    │
+    └── Terraform Apply
+            │
+            ▼
+         AWS
+            │
+            ▼
+      Kubernetes
+            │
+            ▼
+         Helm
+            │
+            ▼
+    RoboShop Application
+            │
+            ├─────────────────┐
+            │                 │
+            ▼                 ▼
+       Prometheus          Fluent Bit
+            │                 │
+            ▼                 ▼
+        Grafana        Elasticsearch
+                              │
+                              ▼
+                            Kibana
 ```
 
-### 3. Understand and Optimize Docker Layering
-* **Read-Only Image Layers:** Every instruction in a `Dockerfile` (such as `RUN`, `COPY`, `ADD`) creates a read-only layer. These layers are stacked sequentially.
-* **Layer Minimization:** Combine commands within `RUN` instructions (e.g., using `&&` and line continuations `\`) where possible. This keeps the number of layers low and prevents temporary build files from bloating the final image size (since deleting files in a subsequent layer does not reclaim space from previous layers).
-* **Thin Writable Container Layer:** When a container is started from an image, Docker adds a thin, writable "container layer" on top of the stack. All runtime changes (such as writing logs or modifying files) are saved in this layer. Deleting the container removes this writable layer, keeping the underlying image intact.
+---
 
-**Example of Dockerfile Layering (from `user/dockerfile`):**
+# 👨‍💻 Author
 
-Below is a side-by-side mapping of the instructions in the `user/dockerfile` to the resulting image layers:
+**Ruthvik**
 
-| Dockerfile Instruction | Resulting Layer Stack (Bottom-Up) |
-| :--- | :--- |
-| `CMD ["node", "server.js"]` | ├── **Layer 8:** CMD |
-| `ENV MONGO="true" \ ...` | ├── **Layer 7:** ENV |
-| `RUN npm install` | ├── **Layer 6:** node_modules |
-| `COPY server.js .` | ├── **Layer 5:** server.js |
-| `COPY package.json .` | ├── **Layer 4:** package.json |
-| `WORKDIR /app` | ├── **Layer 3:** WORKDIR |
-| `RUN mkdir /app` | ├── **Layer 2:** mkdir /app |
-| `FROM node:20.20.2-alpine3.23` | └── **Layer 1:** node image |
+DevOps Engineer
 
-### 4. Use `.dockerignore` Files
-* Exclude unnecessary files and folders (e.g., `node_modules`, `.git`, `dist`, local log files, configuration secrets) from entering the build context.
-* This keeps build times fast and prevents confidential local configuration files from leaking into the container.
+GitHub: https://github.com/ruthvikk1214
 
-### 5. Run as a Non-Root User
-* By default, Docker containers run with root privileges. For production setups, define and run the container with a non-root user (e.g., the built-in `node` user in Node.js images, or create a custom system user).
+---
 
-```dockerfile
-# Example for Node.js Alpine
-USER node
-```
+# ⭐ Project Summary
 
-### 6. Utilize Multi-Stage Builds
-* For compiled or built applications (like Java or React apps), use multi-stage builds. Compile artifacts in a heavier builder container, then copy only the finalized assets/jars to a lightweight runner image.
+This project demonstrates an end-to-end production-style DevOps and DevSecOps implementation for a microservices application.
 
-### 7. Avoid Storing Secrets or Sensitive Data in Dockerfiles
-* Do not hardcode passwords, API keys, or certificates in the `Dockerfile` or source files.
-* Inject sensitive data at runtime using environment variables (`env_file`, `environment` keys in Docker Compose) or Docker Secrets.
+The complete solution covers:
 
-### 8. Clean Up Package Manager Caches
-* When installing OS dependencies via `apk`, `apt`, or `dnf`, clean up package cache databases to avoid bloating the final image.
+* 🐳 Docker
+* 🏗️ Terraform
+* ☸️ Kubernetes
+* ⛵ Helm
+* 🌐 DNS and Service Discovery
+* 🔄 CI/CD
+* 🛑 Manual Approval Gates
+* 🔐 SAST
+* 🔍 Shift-Left Security
+* 🛡️ Trivy Image Scanning
+* 📊 Prometheus
+* 📈 Grafana
+* 📜 EFK Centralized Logging
 
-```dockerfile
-RUN apk add --no-cache curl
-```
+The project demonstrates how modern DevOps and DevSecOps practices can be combined to automate infrastructure provisioning, application deployment, security validation, monitoring, and centralized logging.
