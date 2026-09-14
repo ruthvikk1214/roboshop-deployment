@@ -51,22 +51,31 @@ module "eks" {
   # -------------------------------------------------------------
   eks_managed_node_groups = {
     spot = {
-      desired_size   = 2
-      max_size       = 2
-      min_size       = 1
-      instance_types = ["t3.medium"]
+      name         = "spot"
+      min_size     = 3
+      max_size     = 5
+      desired_size = 3
+
+      instance_types = ["t3.medium", "t3a.medium"]
       capacity_type  = "SPOT"
-      subnet_ids     = var.private_subnet_ids # can land in any of the AZs
-      ami_type       = "AL2_x86_64"
-      # Optional: set a small root volume to keep costs down
+
+      # Increase root volume from default 20GB to 50GB gp3
       block_device_mappings = {
         xvda = {
           device_name = "/dev/xvda"
           ebs = {
-            volume_size = 8 # GiB – smallest allowed for EBS
-            volume_type = "gp3"
+            volume_size           = 50
+            volume_type           = "gp3"
+            iops                  = 3000
+            throughput            = 125
+            delete_on_termination = true
           }
         }
+      }
+
+      labels = {
+        Environment = "dev"
+        Deployment  = "roboshop"
       }
     }
   }

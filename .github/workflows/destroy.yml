@@ -26,13 +26,6 @@ jobs:
           # Connect to EKS. If the cluster is already gone, exit cleanly.
           aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }} || exit 0
 
-          # 1. Clean up ELK Logging Stack (Elasticsearch, Kibana, Filebeat)
-          echo "Uninstalling ELK logging stack..."
-          helm uninstall filebeat -n logging || echo "Filebeat release not found"
-          helm uninstall kibana -n logging || echo "Kibana release not found"
-          helm uninstall elasticsearch -n logging || echo "Elasticsearch release not found"
-          kubectl delete pvc --all -n logging || echo "No logging PVCs found"
-          kubectl delete namespace logging || echo "Logging namespace not found"
 
           # 2. Clean up Monitoring Stack (Prometheus & Grafana)
           echo "Uninstalling monitoring stack..."
