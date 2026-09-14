@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init-scripts
+  namespace: {{ .Release.Namespace }}
+data:
+  app-user.sql: |
+{{ .Files.Get "docker/mysql/db/app-user.sql" | indent 4 }}
+  master-data.sql: |
+{{ .Files.Get "docker/mysql/db/master-data.sql" | indent 4 }}
