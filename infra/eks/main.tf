@@ -10,14 +10,10 @@ terraform {
   }
 }
 
-
 # ------------------------------------------------------------------
 # Data source – current region (used for the EKS module)
 # ------------------------------------------------------------------
 data "aws_region" "current" {}
-
-# ------------------------------------------------------------------
-
 
 # ------------------------------------------------------------------
 # EKS Cluster – using the official Terraform AWS EKS module
@@ -27,7 +23,7 @@ module "eks" {
   version = "~> 19.0"
 
   cluster_name    = "roboshop-eks"
-  cluster_version = "1.30" # latest stable at time of writing
+  cluster_version = "1.30"
 
   # Attach the VPC we created
   vpc_id     = var.vpc_id
@@ -47,7 +43,7 @@ module "eks" {
   }
 
   # -------------------------------------------------------------
-  # Node group – scaling to 2 instances to bypass IP limits
+  # Node group – 3 Spot instances with 50GB root EBS on AL2023
   # -------------------------------------------------------------
   eks_managed_node_groups = {
     spot = {
@@ -58,6 +54,12 @@ module "eks" {
 
       instance_types = ["t3.medium", "t3a.medium"]
       capacity_type  = "SPOT"
+
+      # Explicitly use Amazon Linux 2023 AMI required for Kubernetes 1.30
+      ami_type = "AL2023_x86_64_STANDARD"
+
+      # AL2023 uses standard cloud-init nodeadm rather than legacy AL2 bootstrap.sh
+      enable_bootstrap_user_data = true
 
       # Increase root volume from default 20GB to 50GB gp3
       block_device_mappings = {
