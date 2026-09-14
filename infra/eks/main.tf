@@ -58,10 +58,7 @@ module "eks" {
       # Explicitly use Amazon Linux 2023 AMI required for Kubernetes 1.30
       ami_type = "AL2023_x86_64_STANDARD"
 
-      # AL2023 uses standard cloud-init nodeadm rather than legacy AL2 bootstrap.sh
-      enable_bootstrap_user_data = true
-
-      # Increase root volume from default 20GB to 50GB gp3
+      # 50GB gp3 root volume
       block_device_mappings = {
         xvda = {
           device_name = "/dev/xvda"
