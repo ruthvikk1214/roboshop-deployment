@@ -16,7 +16,7 @@ terraform {
 }
 
 # -----------------------------------------------------------------------------
-# Data source – current region (used for the EKS module)
+# Data source – current region
 # -----------------------------------------------------------------------------
 data "aws_region" "current" {}
 
@@ -36,13 +36,6 @@ module "eks" {
   enable_irsa                    = true
   cluster_endpoint_public_access = true
 
-  cluster_addons = {
-    aws-ebs-csi-driver = {
-      most_recent              = true
-      service_account_role_arn = module.ebs_csi_irsa_role.iam_role_arn
-    }
-  }
-
   eks_managed_node_groups = {
     spot = {
       name           = "spot"
@@ -51,6 +44,9 @@ module "eks" {
       max_size       = 3
       desired_size   = 3
       capacity_type  = "SPOT"
+
+      # Required for EKS 1.30+
+      ami_type = "AL2023_x86_64_STANDARD"
 
       block_device_mappings = {
         xvda = {
@@ -85,6 +81,20 @@ module "ebs_csi_irsa_role" {
 }
 
 # -----------------------------------------------------------------------------
+# AWS EBS CSI Driver EKS Addon (Standalone to prevent circular dependency)
+# -----------------------------------------------------------------------------
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name             = module.eks.cluster_name
+  addon_name               = "aws-ebs-csi-driver"
+  service_account_role_arn = module.ebs_csi_irsa_role.iam_role_arn
+
+  depends_on = [
+    module.eks.eks_managed_node_groups,
+    module.ebs_csi_irsa_role
+  ]
+}
+
+# -----------------------------------------------------------------------------
 # Default StorageClass Configuration (EBS gp3)
 # -----------------------------------------------------------------------------
 resource "kubernetes_annotations" "disable_gp2_default" {
@@ -98,7 +108,7 @@ resource "kubernetes_annotations" "disable_gp2_default" {
   }
   force = true
 
-  depends_on = [module.eks]
+  depends_on = [aws_eks_addon.ebs_csi]
 }
 
 resource "kubernetes_storage_class_v1" "gp3" {
@@ -118,5 +128,5 @@ resource "kubernetes_storage_class_v1" "gp3" {
     encrypted = "true"
   }
 
-  depends_on = [module.eks]
+  depends_on = [aws_eks_addon.ebs_csi]
 }
