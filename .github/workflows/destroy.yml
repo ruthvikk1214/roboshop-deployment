@@ -32,7 +32,11 @@ jobs:
         run: |
           cd infra/route53
           terraform init
-          terraform destroy -auto-approve || echo "Route53 records already removed"
+          terraform destroy \
+            -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" \
+            -var="alb_dns_name=dummy.elb.amazonaws.com" \
+            -var="alb_zone_id=Z35SXDOTRQ7X7K" \
+            -auto-approve || echo "Route53 records already removed"
 
       - name: Uninstall Roboshop & Teardown ALB
         run: |
