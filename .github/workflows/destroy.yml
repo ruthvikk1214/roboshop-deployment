@@ -8,7 +8,7 @@ env:
 
 jobs:
   destroy:
-    name: Destroy All Resources
+    name: Destroy EKS & AWS Infrastructure
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -24,60 +24,44 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Destroy Route53 DNS (if exists)
+      - name: Configure kubeconfig
         run: |
-          ALB_DNS=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
-            --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || echo "dummy.example.com")
-          ALB_ZONE=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
-            --query 'LoadBalancers[0].CanonicalHostedZoneId' --output text 2>/dev/null || echo "Z35SXDOTRQ7X7K")
+          aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }} || echo "Cluster already unreachable"
 
+      - name: Destroy Route53 Records
+        run: |
+          cd infra/route53
           terraform init
-          terraform destroy \
-            -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" \
-            -var="alb_dns_name=$ALB_DNS" \
-            -var="alb_zone_id=$ALB_ZONE" \
-            -auto-approve || echo "Route53 state not found or already destroyed"
-        working-directory: infra/route53
-        continue-on-error: true
+          terraform destroy -auto-approve || echo "Route53 records already removed"
 
-      - name: Destroy Helm Deployments & PVCs (if exists)
+      - name: Uninstall Roboshop & Teardown ALB
         run: |
-          aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }} || exit 0
+          echo "Uninstalling Roboshop Helm release (triggers ALB deletion)..."
+          helm uninstall roboshop -n roboshop || kubectl delete ingress roboshop-ingress -n roboshop --ignore-not-found=true
 
-          echo "Uninstalling monitoring stack..."
-          helm uninstall monitoring-stack -n monitoring || echo "Monitoring release not found"
-          kubectl delete pvc --all -n monitoring || echo "No monitoring PVCs found"
-          kubectl delete namespace monitoring || echo "Monitoring namespace not found"
-
-          echo "Uninstalling Roboshop application..."
-          helm uninstall roboshop -n roboshop || echo "Roboshop Helm release not found"
-          kubectl delete pvc --all -n roboshop || echo "No Roboshop PVCs found"
-
-          echo "Waiting for AWS ALB 'roboshop-alb' to be deleted by controller..."
-          while aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} >/dev/null 2>&1; do
-            echo "ALB still provisioning teardown in AWS, waiting 10s..."
+          echo "Waiting for AWS ALB 'roboshop-alb' to be completely deleted..."
+          while true; do
+            ALB_EXISTS=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} 2>&1 || true)
+            if echo "$ALB_EXISTS" | grep -q "LoadBalancerNotFound"; then
+              echo "ALB successfully deleted from AWS."
+              break
+            fi
+            echo "Waiting for ALB deletion in AWS..."
             sleep 10
           done
-          echo "ALB successfully removed from AWS."
 
-          kubectl delete namespace roboshop || echo "Roboshop namespace not found"
+      - name: Uninstall Monitoring Stack & PVCs
+        run: |
+          helm uninstall monitoring-stack -n monitoring || true
+          kubectl delete pvc --all -n monitoring --ignore-not-found=true
+          kubectl delete pvc --all -n roboshop --ignore-not-found=true
 
-          echo "Uninstalling AWS Load Balancer Controller..."
-          kubectl delete validatingwebhookconfigurations aws-load-balancer-webhook || true
-          kubectl delete mutatingwebhookconfigurations aws-load-balancer-webhook || true
-          helm uninstall aws-load-balancer-controller -n kube-system || echo "ALB controller not found"
+      - name: Uninstall AWS Load Balancer Controller
+        run: |
+          helm uninstall aws-load-balancer-controller -n kube-system || true
 
-          echo "Checking for lingering Roboshop target groups..."
-          for tg in $(aws elbv2 describe-target-groups --region ${{ env.AWS_REGION }} --query "TargetGroups[?contains(TargetGroupName, 'roboshop')].TargetGroupArn" --output text 2>/dev/null); do
-            echo "Deleting orphaned Target Group: $tg"
-            aws elbv2 delete-target-group --region ${{ env.AWS_REGION }} --target-group-arn $tg || true
-          done
-        continue-on-error: true
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: infra
-
-      - name: Terraform Destroy
-        run: terraform destroy -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" -auto-approve
-        working-directory: infra
+      - name: Terraform Destroy (EKS, VPC, IAM)
+        run: |
+          cd infra
+          terraform init
+          terraform destroy -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" -auto-approve
