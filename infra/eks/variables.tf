@@ -21,3 +21,8 @@ variable "alb_sg_id" {
   description = "ALB security group ID to allow inbound traffic from"
   type        = string
 }
+variable "alb_security_group_id" {
+  description = "Security Group ID of the Application Load Balancer"
+  type        = string
+  default     = "sg-04ae574a2d088757b"
+}

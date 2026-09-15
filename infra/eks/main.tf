@@ -130,3 +130,33 @@ resource "kubernetes_storage_class_v1" "gp3" {
 
   depends_on = [aws_eks_addon.ebs_csi]
 }
+# -----------------------------------------------------------------------------
+# IAM Role for AWS Load Balancer Controller (IRSA)
+# -----------------------------------------------------------------------------
+module "load_balancer_controller_irsa_role" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name                              = "roboshop-alb-controller-role"
+  attach_load_balancer_controller_policy = true
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:aws-load-balancer-controller"]
+    }
+  }
+}
+# -----------------------------------------------------------------------------
+# Allow ALB to reach Worker Nodes on Port 80
+# -----------------------------------------------------------------------------
+resource "aws_security_group_rule" "alb_to_nodes_80" {
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  security_group_id        = module.eks.node_security_group_id
+  source_security_group_id = var.alb_security_group_id
+
+  description = "Allow inbound HTTP from ALB to worker node pods"
+}

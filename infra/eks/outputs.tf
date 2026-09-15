@@ -15,5 +15,5 @@ output "cluster_certificate_authority_data" {
 
 output "alb_controller_role_arn" {
   description = "IAM Role ARN for AWS Load Balancer Controller"
-  value       = try(module.eks.alb_controller_role_arn, "")
+  value       = module.load_balancer_controller_irsa_role.iam_role_arn
 }
