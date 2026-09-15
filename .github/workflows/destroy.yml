@@ -1,7 +1,7 @@
 name: Destroy Infrastructure
 
 on:
-  workflow_dispatch: # Only trigger manually
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
@@ -21,11 +21,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # MOVED UP: Must run before any terraform commands
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      # 1. Destroy Route53 FIRST while the ALB is still alive and readable
       - name: Destroy Route53 DNS (if exists)
         run: |
           ALB_DNS=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
@@ -42,24 +40,19 @@ jobs:
         working-directory: infra/route53
         continue-on-error: true
 
-      # 2. Teardown Helm, Microservices, PVCs, and ALB
       - name: Destroy Helm Deployments & PVCs (if exists)
         run: |
-          # Connect to EKS. If the cluster is already gone, exit cleanly.
           aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }} || exit 0
 
-          # Clean up Monitoring Stack (Prometheus & Grafana)
           echo "Uninstalling monitoring stack..."
           helm uninstall monitoring-stack -n monitoring || echo "Monitoring release not found"
           kubectl delete pvc --all -n monitoring || echo "No monitoring PVCs found"
           kubectl delete namespace monitoring || echo "Monitoring namespace not found"
 
-          # Clean up Roboshop Microservices
           echo "Uninstalling Roboshop application..."
           helm uninstall roboshop -n roboshop || echo "Roboshop Helm release not found"
           kubectl delete pvc --all -n roboshop || echo "No Roboshop PVCs found"
 
-          # Actively wait for AWS Load Balancer Controller to remove the ALB
           echo "Waiting for AWS ALB 'roboshop-alb' to be deleted by controller..."
           while aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} >/dev/null 2>&1; do
             echo "ALB still provisioning teardown in AWS, waiting 10s..."
@@ -67,16 +60,13 @@ jobs:
           done
           echo "ALB successfully removed from AWS."
 
-          # Clean up roboshop namespace after the ALB has been deleted
           kubectl delete namespace roboshop || echo "Roboshop namespace not found"
 
-          # Clean up AWS Load Balancer Controller and webhooks
           echo "Uninstalling AWS Load Balancer Controller..."
           kubectl delete validatingwebhookconfigurations aws-load-balancer-webhook || true
           kubectl delete mutatingwebhookconfigurations aws-load-balancer-webhook || true
           helm uninstall aws-load-balancer-controller -n kube-system || echo "ALB controller not found"
 
-          # Prevent VPC DependencyViolation: Clean up any orphaned Target Groups
           echo "Checking for lingering Roboshop target groups..."
           for tg in $(aws elbv2 describe-target-groups --region ${{ env.AWS_REGION }} --query "TargetGroups[?contains(TargetGroupName, 'roboshop')].TargetGroupArn" --output text 2>/dev/null); do
             echo "Deleting orphaned Target Group: $tg"
@@ -84,7 +74,6 @@ jobs:
           done
         continue-on-error: true
 
-      # 3. Destroy Base Infrastructure (EKS, VPC, Subnets)
       - name: Terraform Init
         run: terraform init
         working-directory: infra

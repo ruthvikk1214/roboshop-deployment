@@ -4,12 +4,18 @@
 
 terraform {
   required_version = ">= 1.5.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.20.0"
+    }
   }
+
   backend "s3" {
     bucket = "roboshop-terraform-state-rk1214-9988"
     key    = "infra/terraform.tfstate"
@@ -17,8 +23,22 @@ terraform {
   }
 }
 
+# ------------------------------------------------------------------
+# Providers Configuration
+# ------------------------------------------------------------------
 provider "aws" {
   region = var.aws_region
+}
+
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.aws_region]
+  }
 }
 
 # ------------------------------------------------------------------
@@ -65,6 +85,11 @@ output "cluster_name" {
 output "cluster_endpoint" {
   description = "Endpoint for the EKS cluster"
   value       = module.eks.cluster_endpoint
+}
+
+output "cluster_certificate_authority_data" {
+  description = "Base64 encoded certificate data for EKS cluster"
+  value       = module.eks.cluster_certificate_authority_data
 }
 
 output "vpc_id" {

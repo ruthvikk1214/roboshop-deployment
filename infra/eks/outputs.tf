@@ -4,11 +4,16 @@ output "cluster_name" {
 }
 
 output "cluster_endpoint" {
-  description = "Endpoint for the EKS cluster"
+  description = "Endpoint for EKS control plane"
   value       = module.eks.cluster_endpoint
 }
 
+output "cluster_certificate_authority_data" {
+  description = "Base64 encoded certificate data required to communicate with the cluster"
+  value       = module.eks.cluster_certificate_authority_data
+}
+
 output "alb_controller_role_arn" {
-  description = "IAM Role ARN for the AWS Load Balancer Controller"
-  value       = module.alb_controller_irsa_role.iam_role_arn
+  description = "IAM Role ARN for AWS Load Balancer Controller"
+  value       = try(module.eks.alb_controller_role_arn, "")
 }

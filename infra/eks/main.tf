@@ -1,5 +1,6 @@
-# ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Terraform configuration & provider
+# -----------------------------------------------------------------------------
 terraform {
   required_version = ">= 1.5"
   required_providers {
@@ -7,17 +8,21 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = ">= 2.20.0"
+    }
   }
 }
 
-# ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Data source – current region (used for the EKS module)
-# ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 data "aws_region" "current" {}
 
-# ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # EKS Cluster – using the official Terraform AWS EKS module
-# ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 19.0"
@@ -25,14 +30,10 @@ module "eks" {
   cluster_name    = "roboshop-eks"
   cluster_version = "1.30"
 
-  # Attach the VPC we created
   vpc_id     = var.vpc_id
-  subnet_ids = var.private_subnet_ids # **private** subnets only
+  subnet_ids = var.private_subnet_ids
 
-  # Enable OIDC so the Helm chart can create an IRSA ServiceAccount
-  enable_irsa = true
-
-  # Allow GitHub Actions runner to connect to the cluster API
+  enable_irsa                    = true
   cluster_endpoint_public_access = true
 
   cluster_addons = {
@@ -42,94 +43,80 @@ module "eks" {
     }
   }
 
-  # -------------------------------------------------------------
-  # Node group – 3 Spot instances with 50GB root EBS on AL2023
-  # -------------------------------------------------------------
   eks_managed_node_groups = {
     spot = {
-      name         = "spot"
-      min_size     = 3
-      max_size     = 5
-      desired_size = 3
-
-      instance_types = ["t3.medium", "t3a.medium"]
+      name           = "spot"
+      instance_types = ["t3.medium"]
+      min_size       = 3
+      max_size       = 3
+      desired_size   = 3
       capacity_type  = "SPOT"
 
-      # Explicitly use Amazon Linux 2023 AMI required for Kubernetes 1.30
-      ami_type = "AL2023_x86_64_STANDARD"
-
-      # 50GB gp3 root volume
       block_device_mappings = {
         xvda = {
           device_name = "/dev/xvda"
           ebs = {
             volume_size           = 50
             volume_type           = "gp3"
-            iops                  = 3000
-            throughput            = 125
             delete_on_termination = true
           }
         }
       }
-
-      labels = {
-        Environment = "dev"
-        Deployment  = "roboshop"
-      }
     }
   }
-
-  tags = {
-    Environment = "educational"
-    Owner       = "ruthvikk1214"
-  }
 }
 
-# ------------------------------------------------------------------
-# Allow traffic from ALB Security Group to EKS Node Security Group
-# ------------------------------------------------------------------
-resource "aws_security_group_rule" "alb_to_nodes" {
-  type                     = "ingress"
-  from_port                = 0
-  to_port                  = 0
-  protocol                 = "-1"
-  source_security_group_id = var.alb_sg_id
-  security_group_id        = module.eks.node_security_group_id
-  description              = "Allow traffic from ALB"
-}
-
-# ------------------------------------------------------------------
-# IAM Role for EBS CSI Driver (allows PVCs to provision EBS volumes)
-# ------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# IAM Role for AWS EBS CSI Driver (IRSA)
+# -----------------------------------------------------------------------------
 module "ebs_csi_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.0"
 
-  role_name             = "${module.eks.cluster_name}-ebs-csi"
+  role_name_prefix      = "ebs-csi-driver-"
   attach_ebs_csi_policy = true
 
   oidc_providers = {
-    ex = {
+    main = {
       provider_arn               = module.eks.oidc_provider_arn
       namespace_service_accounts = ["kube-system:ebs-csi-controller-sa"]
     }
   }
 }
 
-# ------------------------------------------------------------------
-# IAM Role for AWS Load Balancer Controller (IRSA)
-# ------------------------------------------------------------------
-module "alb_controller_irsa_role" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "~> 5.0"
+# -----------------------------------------------------------------------------
+# Default StorageClass Configuration (EBS gp3)
+# -----------------------------------------------------------------------------
+resource "kubernetes_annotations" "disable_gp2_default" {
+  api_version = "storage.k8s.io/v1"
+  kind        = "StorageClass"
+  metadata {
+    name = "gp2"
+  }
+  annotations = {
+    "storageclass.kubernetes.io/is-default-class" = "false"
+  }
+  force = true
 
-  role_name                              = "${module.eks.cluster_name}-alb-controller"
-  attach_load_balancer_controller_policy = true
+  depends_on = [module.eks]
+}
 
-  oidc_providers = {
-    ex = {
-      provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["kube-system:alb-controller-sa"]
+resource "kubernetes_storage_class_v1" "gp3" {
+  metadata {
+    name = "gp3"
+    annotations = {
+      "storageclass.kubernetes.io/is-default-class" = "true"
     }
   }
+
+  storage_provisioner    = "ebs.csi.aws.com"
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+
+  parameters = {
+    type      = "gp3"
+    encrypted = "true"
+  }
+
+  depends_on = [module.eks]
 }

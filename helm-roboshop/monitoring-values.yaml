@@ -5,11 +5,11 @@ grafana:
   adminPassword: "admin"
   resources:
     requests:
-      cpu: 50m
-      memory: 128Mi
-    limits:
-      cpu: 200m
+      cpu: 100m
       memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
 
 prometheus:
   prometheusSpec:
@@ -24,10 +24,11 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
+          storageClassName: gp3
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              storage: 2Gi
+              storage: 20Gi
 
 # Disable Alertmanager to save RAM on small nodes
 alertmanager:
