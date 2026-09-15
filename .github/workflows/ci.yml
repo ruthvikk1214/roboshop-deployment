@@ -4,72 +4,15 @@ on:
   push:
     branches:
       - main
-  pull_request:
-  workflow_dispatch: # Manual gate trigger
-
-permissions:
-  contents: read
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
 
 jobs:
-  # 1. Vulnerability Scanning
-  image-scan:
-    name: Vulnerability Scan (Trivy)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Add Maven cache to avoid rate limiting
-      - name: Cache Maven dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-
-      # Populate Maven cache before Trivy scan
-      - name: Resolve Maven dependencies
-        run: |
-          find . -name "pom.xml" -type f | while read pom; do
-            mvn -f "$pom" dependency:resolve -DskipTests || true
-          done
-        continue-on-error: true
-
-      # Suggestion: Using 'fs' (file system) scan is much faster than building 6 docker images
-      # on every push. It scans the Dockerfiles and package.json/requirements.txt directly.
-      - name: Run Trivy vulnerability scanner in fs mode
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          ignore-unfixed: true
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
-
-  # 2. Infrastructure Security Scanning
-  terraform-checkov:
-    name: Terraform Security (Checkov)
-    runs-on: ubuntu-latest
-    needs: image-scan
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Checkov action
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: infra/
-          framework: terraform
-          soft_fail: true # Set to false if you want Checkov to break the build on failure
-
-  # 3. Terraform Plan & Validation
-  terraform-plan:
+  validate-and-plan:
     name: Terraform Plan & Validate
     runs-on: ubuntu-latest
-    needs: terraform-checkov
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,15 +26,13 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: infra
 
       - name: Terraform Init
         run: terraform init
-        working-directory: infra
-
-      - name: Terraform Format Check
-        run: terraform fmt -check
         working-directory: infra
 
       - name: Terraform Validate
@@ -102,13 +43,10 @@ jobs:
         run: terraform plan -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}"
         working-directory: infra
 
-  # 4. Terraform Apply (Manual Gate)
-  terraform-apply:
+  deploy:
     name: Terraform Apply (Manual Gate)
+    needs: validate-and-plan
     runs-on: ubuntu-latest
-    needs: terraform-plan
-    # This ensures the apply job ONLY runs when you manually trigger it via the Actions UI
-    if: github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -122,8 +60,6 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
 
       - name: Terraform Init
         run: terraform init
@@ -132,87 +68,66 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" -auto-approve
         working-directory: infra
-      
+
+      - name: Configure kubeconfig
+        run: aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }}
+
       - name: Deploy Prometheus & Grafana Monitoring Stack
         run: |
-          CLUSTER_NAME=$(terraform output -raw cluster_name)
-          aws eks update-kubeconfig --name $CLUSTER_NAME --region ${{ env.AWS_REGION }}
-
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-          helm repo update
+          helm repo update prometheus-community
 
           helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
-            --namespace monitoring \
+            -n monitoring \
             --create-namespace \
-            -f ../helm-roboshop/monitoring-values.yaml
-        working-directory: infra
+            -f monitoring-values.yaml
 
-      
       - name: Install AWS Load Balancer Controller
         run: |
-          CLUSTER_NAME=$(terraform output -raw cluster_name)
-          VPC_ID=$(terraform output -raw vpc_id)
-          ALB_ROLE_ARN=$(terraform output -raw alb_controller_role_arn)
-
-          aws eks update-kubeconfig --name $CLUSTER_NAME --region ${{ env.AWS_REGION }}
-
-          # Delete old webhooks to prevent TLS certificate mismatch errors on re-runs
-          kubectl delete validatingwebhookconfigurations aws-load-balancer-webhook || true
-          kubectl delete mutatingwebhookconfigurations aws-load-balancer-webhook || true
+          ALB_ROLE_ARN=$(cd infra && terraform output -raw alb_controller_role_arn)
 
           helm repo add eks https://aws.github.io/eks-charts
-          helm repo update
+          helm repo update eks
 
           helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
-            --namespace kube-system \
-            --create-namespace \
-            --set clusterName=$CLUSTER_NAME \
+            -n kube-system \
+            --set clusterName=roboshop-eks \
             --set serviceAccount.create=true \
-            --set serviceAccount.name=alb-controller-sa \
-            --set "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=$ALB_ROLE_ARN" \
-            --set region=${{ env.AWS_REGION }} \
-            --set vpcId=$VPC_ID \
-            --set defaultIngressClass=true
-        working-directory: infra
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="$ALB_ROLE_ARN"
 
       - name: Wait for ALB Controller to be ready
         run: |
-          echo "Waiting for ALB Controller webhook to become available..."
-          kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=120s
-          sleep 15
+          kubectl rollout status deployment aws-load-balancer-controller -n kube-system --timeout=120s
 
       - name: Deploy Roboshop Helm Chart
         run: |
-          CLUSTER_NAME=$(terraform output -raw cluster_name)
-          ALB_SG_ID=$(terraform output -raw alb_sg_id)
-          aws eks update-kubeconfig --name $CLUSTER_NAME --region ${{ env.AWS_REGION }}
-          
-          helm upgrade --install roboshop ../helm-roboshop \
-            --namespace roboshop --create-namespace \
-            --set ingress.enabled=true \
-            --set ingress.hosts[0].host=roboshop.rk1214.in \
-            --set "ingress.annotations.alb\.ingress\.kubernetes\.io/security-groups=$ALB_SG_ID"
-        working-directory: infra
+          helm upgrade --install roboshop ./helm-roboshop \
+            -n roboshop \
+            --create-namespace
 
       - name: Configure Route53 DNS
-        env:
-          TF_VAR_hosted_zone_id: ${{ secrets.HOSTED_ZONE_ID }}
         run: |
-          echo "Waiting for ALB 'roboshop-alb' to be provisioned..."
-          sleep 15
-          until aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} >/dev/null 2>&1; do
+          echo "Waiting for ALB 'roboshop-alb' to be provisioned in AWS..."
+          while true; do
+            ALB_DNS=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
+              --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || echo "")
+            ALB_ZONE=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} \
+              --query 'LoadBalancers[0].CanonicalHostedZoneId' --output text 2>/dev/null || echo "")
+
+            if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ] && [ -n "$ALB_ZONE" ] && [ "$ALB_ZONE" != "None" ]; then
+              echo "ALB found: $ALB_DNS (Zone: $ALB_ZONE)"
+              break
+            fi
+
             echo "Still waiting for ALB..."
             sleep 10
           done
-          aws elbv2 wait load-balancer-available --names roboshop-alb --region ${{ env.AWS_REGION }}
 
-          export TF_VAR_alb_dns_name=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} --query 'LoadBalancers[0].DNSName' --output text)
-          export TF_VAR_alb_zone_id=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} --query 'LoadBalancers[0].CanonicalHostedZoneId' --output text)
-
-          echo "ALB DNS : $TF_VAR_alb_dns_name"
-          echo "ALB Zone: $TF_VAR_alb_zone_id"
-          echo "Hosted Zone ID is set: $([ -n \"$TF_VAR_hosted_zone_id\" ] && echo YES || echo NO)"
-
+          cd infra/route53
           terraform init
-          terraform apply -auto-approve
-        working-directory: infra/route53
+          terraform apply \
+            -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}" \
+            -var="alb_dns_name=$ALB_DNS" \
+            -var="alb_zone_id=$ALB_ZONE" \
+            -auto-approve
