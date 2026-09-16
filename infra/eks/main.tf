@@ -112,15 +112,6 @@ module "alb_controller_irsa_role" {
 }
 
 # ------------------------------------------------------------------
-# EKS Addon for EBS CSI
-# ------------------------------------------------------------------
-resource "aws_eks_addon" "ebs_csi" {
-  cluster_name             = module.eks.cluster_name
-  addon_name               = "aws-ebs-csi-driver"
-  service_account_role_arn = module.ebs_csi_irsa_role.iam_role_arn
-}
-
-# ------------------------------------------------------------------
 # GP3 Storage Class
 # ------------------------------------------------------------------
 resource "kubernetes_storage_class_v1" "gp3" {
@@ -136,5 +127,5 @@ resource "kubernetes_storage_class_v1" "gp3" {
   parameters = {
     type = "gp3"
   }
-  depends_on = [aws_eks_addon.ebs_csi]
+  depends_on = [module.eks]
 }
