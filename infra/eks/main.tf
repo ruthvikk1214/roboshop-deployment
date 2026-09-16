@@ -1,5 +1,6 @@
 # ------------------------------------------------------------------
 # Terraform configuration & provider
+# ------------------------------------------------------------------
 terraform {
   required_version = ">= 1.5"
   required_providers {
@@ -10,14 +11,10 @@ terraform {
   }
 }
 
-
 # ------------------------------------------------------------------
 # Data source – current region (used for the EKS module)
 # ------------------------------------------------------------------
 data "aws_region" "current" {}
-
-# ------------------------------------------------------------------
-
 
 # ------------------------------------------------------------------
 # EKS Cluster – using the official Terraform AWS EKS module
@@ -58,6 +55,7 @@ module "eks" {
       capacity_type  = "SPOT"
       subnet_ids     = var.private_subnet_ids # can land in any of the AZs
       ami_type       = "AL2_x86_64"
+      
       # Optional: set a small root volume to keep costs down
       block_device_mappings = {
         xvda = {
@@ -75,19 +73,6 @@ module "eks" {
     Environment = "educational"
     Owner       = "ruthvikk1214"
   }
-}
-
-# ------------------------------------------------------------------
-# Allow traffic from ALB Security Group to EKS Node Security Group
-# ------------------------------------------------------------------
-resource "aws_security_group_rule" "alb_to_nodes" {
-  type                     = "ingress"
-  from_port                = 0
-  to_port                  = 0
-  protocol                 = "-1"
-  source_security_group_id = var.alb_sg_id
-  security_group_id        = module.eks.node_security_group_id
-  description              = "Allow traffic from ALB"
 }
 
 # ------------------------------------------------------------------
@@ -124,4 +109,32 @@ module "alb_controller_irsa_role" {
       namespace_service_accounts = ["kube-system:alb-controller-sa"]
     }
   }
+}
+
+# ------------------------------------------------------------------
+# EKS Addon for EBS CSI
+# ------------------------------------------------------------------
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name             = module.eks.cluster_name
+  addon_name               = "aws-ebs-csi-driver"
+  service_account_role_arn = module.ebs_csi_irsa_role.iam_role_arn
+}
+
+# ------------------------------------------------------------------
+# GP3 Storage Class
+# ------------------------------------------------------------------
+resource "kubernetes_storage_class_v1" "gp3" {
+  metadata {
+    name = "gp3"
+    annotations = {
+      "storageclass.kubernetes.io/is-default-class" = "true"
+    }
+  }
+  storage_provisioner    = "ebs.csi.aws.com"
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+  parameters = {
+    type = "gp3"
+  }
+  depends_on = [aws_eks_addon.ebs_csi]
 }
