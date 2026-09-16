@@ -15,6 +15,14 @@ terraform {
 # Data source – current region (used for the EKS module)
 # ------------------------------------------------------------------
 data "aws_region" "current" {}
+
+# ------------------------------------------------------------------
+# Data source - get VPC details to allow internal traffic
+# ------------------------------------------------------------------
+data "aws_vpc" "eks_vpc" {
+  id = var.vpc_id
+}
+
 # ------------------------------------------------------------------
 # Authenticate Terraform to the EKS Cluster
 # ------------------------------------------------------------------
@@ -27,6 +35,7 @@ provider "kubernetes" {
     args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
   }
 }
+
 # ------------------------------------------------------------------
 # EKS Cluster – using the official Terraform AWS EKS module
 # ------------------------------------------------------------------
@@ -46,6 +55,20 @@ module "eks" {
 
   # Allow GitHub Actions runner to connect to the cluster API
   cluster_endpoint_public_access = true
+
+  # -------------------------------------------------------------
+  # Node Security Group Rules
+  # -------------------------------------------------------------
+  node_security_group_additional_rules = {
+    ingress_vpc = {
+      description = "Allow all traffic from VPC (fixes ALB 504 timeout)"
+      protocol    = "-1"
+      from_port   = 0
+      to_port     = 0
+      type        = "ingress"
+      cidr_blocks = [data.aws_vpc.eks_vpc.cidr_block]
+    }
+  }
 
   cluster_addons = {
     aws-ebs-csi-driver = {
