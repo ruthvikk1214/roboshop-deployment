@@ -89,14 +89,14 @@ module "eks" {
       capacity_type  = "SPOT"
       subnet_ids     = var.private_subnet_ids
       
-      # Explicitly use Amazon Linux 2023 AMI required for Kubernetes 1.30
-      ami_type = "AL2023_x86_64_STANDARD"
+      # Reverting back to Amazon Linux 2 (AL2) which is fully supported on EKS 1.30
+      ami_type = "AL2_x86_64"
 
       block_device_mappings = {
         xvda = {
           device_name = "/dev/xvda"
           ebs = {
-            volume_size = 20
+            volume_size = 8
             volume_type = "gp3"
           }
         }
