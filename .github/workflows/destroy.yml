@@ -29,15 +29,17 @@ jobs:
           # 1. Clean up Monitoring Stack (Prometheus & Grafana)
           echo "Uninstalling monitoring stack..."
           helm uninstall monitoring-stack -n monitoring || echo "Monitoring release not found"
-          kubectl delete pvc --all -n monitoring || echo "No monitoring PVCs found"
           kubectl delete namespace monitoring || echo "Monitoring namespace not found"
 
           # 2. Clean up Roboshop Microservices
           echo "Uninstalling Roboshop application..."
           helm uninstall roboshop -n roboshop || echo "Roboshop Helm release not found"
-          kubectl delete pvc --all -n roboshop || echo "No Roboshop PVCs found"
           
-          # 3. Actively wait for AWS Load Balancer Controller to remove the ALB
+          # 3. Nuke ALL PVCs across the entire cluster to detach EBS volumes
+          echo "Wiping all PVCs to force EBS volume detachment..."
+          kubectl delete pvc --all --all-namespaces || true
+          
+          # 4. Actively wait for AWS Load Balancer Controller to remove the ALB
           echo "Waiting for AWS ALB 'roboshop-alb' to be deleted by controller..."
           while aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} >/dev/null 2>&1; do
             echo "ALB still provisioning teardown in AWS, waiting 10s..."
@@ -45,7 +47,11 @@ jobs:
           done
           echo "ALB successfully removed from AWS."
 
-          # 4. Clean up namespace after the ALB has been deleted
+          # 5. Wait for EBS Volumes to physically detach
+          echo "Giving AWS 60 seconds to detach EBS volumes from the nodes..."
+          sleep 60
+
+          # 6. Clean up namespace after the ALB has been deleted
           kubectl delete namespace roboshop || echo "Roboshop namespace not found"
         continue-on-error: true
 
