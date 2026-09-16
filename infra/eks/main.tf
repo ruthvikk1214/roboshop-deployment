@@ -87,18 +87,16 @@ module "eks" {
       min_size       = 1
       instance_types = ["t3.medium"]
       capacity_type  = "SPOT"
-      subnet_ids     = var.private_subnet_ids # can land in any of the AZs
+      subnet_ids     = var.private_subnet_ids
       
       # Explicitly use Amazon Linux 2023 AMI required for Kubernetes 1.30
       ami_type = "AL2023_x86_64_STANDARD"
-      # AL2023 uses standard cloud-init nodeadm rather than legacy AL2 bootstrap.sh
-      enable_bootstrap_user_data = true
 
       block_device_mappings = {
         xvda = {
           device_name = "/dev/xvda"
           ebs = {
-            volume_size = 20 # GiB – smallest allowed for EBS
+            volume_size = 20
             volume_type = "gp3"
           }
         }
