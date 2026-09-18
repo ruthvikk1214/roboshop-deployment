@@ -1,4 +1,3 @@
-```markdown
 # 🚀 RoboShop - End-to-End DevSecOps Deployment Platform
 
 An end-to-end **DevOps and DevSecOps implementation** for deploying the RoboShop microservices application using Docker, Terraform, Kubernetes, Helm, GitHub Actions, Prometheus, Grafana, SonarQube, and Trivy.
@@ -48,6 +47,7 @@ This project focuses on implementing an end-to-end DevOps and DevSecOps workflow
 
 # 🏗️ End-to-End Architecture
 
+```text
 [Developer] -> [GitHub Repository] -> [GitHub Actions CI/CD]
   │
   ├── [Code Checkout]
@@ -69,10 +69,13 @@ This project focuses on implementing an end-to-end DevOps and DevSecOps workflow
         ▼
    [Prometheus Monitoring] -> [Grafana Dashboards]
 
+```
+
 ---
 
 # 📂 Repository Structure
 
+```text
 roboshop-deployment/
 ├── .github/
 │   └── workflows/          # CI/CD and Destroy pipeline configurations
@@ -81,8 +84,9 @@ roboshop-deployment/
 ├── infra/                  # Terraform configurations (EKS, VPC, Route53)
 ├── scripts/                # Deployment and automation scripts
 ├── compose.yaml            # Local multi-container Docker Compose setup
-├── implementation_plan.md  # Architecture design and rollout plans
 └── README.md
+
+```
 
 ---
 
@@ -124,28 +128,47 @@ Install:
 
 Verify the installation:
 
-$docker --version$ docker compose version
+```bash
+docker --version
+docker compose version
+
+```
 
 ## Clone the Repository
 
-$ git clone https://github.com/ruthvikk1214/roboshop-deployment.git
-$ cd roboshop-deployment
+```bash
+git clone https://github.com/ruthvikk1214/roboshop-deployment.git
+cd roboshop-deployment
+
+```
 
 ## Build and Start
 
-$ docker compose up -d --build
+```bash
+docker compose up -d --build
+
+```
 
 Verify containers:
 
-$ docker ps
+```bash
+docker ps
+
+```
 
 View logs:
 
-$ docker compose logs
+```bash
+docker compose logs
+
+```
 
 Stop the application:
 
-$ docker compose down
+```bash
+docker compose down
+
+```
 
 ---
 
@@ -157,13 +180,16 @@ Microservices require reliable communication between services. Instead of hardco
 
 Docker Compose automatically provides DNS resolution between services using service names.
 
-Example: Cart Service -> http://catalogue:8080 | Redis -> redis:6379
+Example: `Cart Service -> http://catalogue:8080` | `Redis -> redis:6379`
 
 ## Kubernetes DNS
 
 Kubernetes provides internal DNS-based service discovery. Services can communicate using Kubernetes Service names:
 
+```text
 Frontend -> catalogue-service -> Catalogue Pods
+
+```
 
 This enables dynamic communication between microservices without relying on static Pod IP addresses.
 
@@ -183,9 +209,14 @@ Benefits include:
 
 ## Terraform Workflow
 
-$ terraform init
-$terraform validate$ terraform plan
-$terraform apply$ terraform destroy
+```bash
+terraform init
+terraform validate
+terraform plan
+terraform apply
+terraform destroy
+
+```
 
 ---
 
@@ -193,7 +224,7 @@ $terraform apply$ terraform destroy
 
 RoboShop is deployed on Kubernetes for container orchestration. This deployment incorporates critical AWS add-ons for production readiness:
 
-* **AWS EBS CSI Driver:** Dynamically provisions gp3 storage volumes for stateful applications like Prometheus.
+* **AWS EBS CSI Driver:** Dynamically provisions `gp3` storage volumes for stateful applications like Prometheus.
 * **AWS Load Balancer Controller:** Automatically provisions an Application Load Balancer (ALB) to handle external traffic routing to the frontend.
 
 ---
@@ -203,13 +234,25 @@ RoboShop is deployed on Kubernetes for container orchestration. This deployment 
 Helm is used to manage and deploy Kubernetes applications. The Helm charts are located in `helm-roboshop/`.
 
 Install Application:
-$ helm install roboshop .
+
+```bash
+helm install roboshop .
+
+```
 
 Check releases:
-$ helm list
+
+```bash
+helm list
+
+```
 
 Check pods:
-$ kubectl get pods
+
+```bash
+kubectl get pods
+
+```
 
 ---
 
@@ -236,8 +279,10 @@ The pipeline automates:
 
 This project follows the **Shift-Left Security** approach. Security checks are performed early in the software development lifecycle instead of waiting until after deployment.
 
-Shift-Left Flow:
+```text
 Code -> Security Scan (SAST) -> Build -> Security Scan (Container) -> Deploy
+
+```
 
 This helps identify vulnerabilities earlier and reduces the risk of deploying insecure applications.
 
@@ -261,9 +306,12 @@ SonarQube analyzes source code and helps identify:
 
 After the SonarQube analysis, the pipeline checks the Quality Gate:
 
+```text
 Code -> SonarQube Scan -> Quality Gate
   ├── PASS -> Continue Pipeline
   └── FAIL -> Stop Pipeline
+
+```
 
 ---
 
@@ -271,9 +319,12 @@ Code -> SonarQube Scan -> Quality Gate
 
 Trivy is used to scan Docker images for vulnerabilities:
 
+```text
 Docker Build -> Docker Image -> Trivy Scan
   ├── PASS -> Continue Pipeline
   └── FAIL -> Stop Pipeline
+
+```
 
 The scan verifies operating system vulnerabilities, dependency vulnerabilities, and critical/high CVEs.
 
@@ -300,72 +351,83 @@ The project uses a lightweight, highly efficient monitoring stack:
 * **Grafana:** Data visualization and alert notification routing.
 
 ## Collected Metrics:
+
 * CPU and Memory usage
 * Pod health and Node metrics
 * Application metrics and Resource utilization
 
 ## Monitoring Architecture:
+
+```text
 Kubernetes Cluster (Nodes & Pods) -> Prometheus Metrics Collection -> Grafana Dashboards
+
+```
 
 ---
 
 # 🛠️ Technology Stack
 
-| Category                   | Technology                            |
-| -------------------------- | ------------------------------------- |
-| Version Control            | Git, GitHub                           |
-| CI/CD                      | GitHub Actions                        |
-| Manual Gate                | GitHub Environments / Manual Approval |
-| Containerization           | Docker                                |
-| Container Orchestration    | Kubernetes                            |
-| Kubernetes Package Manager | Helm                                  |
-| Cloud Provider             | AWS                                   |
-| Infrastructure as Code     | Terraform                             |
-| Ingress Controller         | AWS Load Balancer Controller          |
-| Storage Provisioning       | AWS EBS CSI Driver (gp3)              |
-| Service Discovery          | Docker DNS, Kubernetes DNS            |
-| Monitoring                 | Prometheus                            |
-| Visualization              | Grafana                               |
-| SAST                       | SonarQube                             |
-| Vulnerability Scanning     | Trivy                                 |
-| Security Strategy          | Shift-Left Security                   |
-| Web Server                 | Nginx                                 |
-| Database                   | MongoDB, MySQL                        |
-| Cache                      | Redis                                 |
-| Messaging                  | RabbitMQ                              |
-| Operating System           | Linux / Amazon Linux 2                |
+| Category | Technology |
+| --- | --- |
+| Version Control | Git, GitHub |
+| CI/CD | GitHub Actions |
+| Manual Gate | GitHub Environments / Manual Approval |
+| Containerization | Docker |
+| Container Orchestration | Kubernetes |
+| Kubernetes Package Manager | Helm |
+| Cloud Provider | AWS |
+| Infrastructure as Code | Terraform |
+| Ingress Controller | AWS Load Balancer Controller |
+| Storage Provisioning | AWS EBS CSI Driver (gp3) |
+| Service Discovery | Docker DNS, Kubernetes DNS |
+| Monitoring | Prometheus |
+| Visualization | Grafana |
+| SAST | SonarQube |
+| Vulnerability Scanning | Trivy |
+| Security Strategy | Shift-Left Security |
+| Web Server | Nginx |
+| Database | MongoDB, MySQL |
+| Cache | Redis |
+| Messaging | RabbitMQ |
+| Operating System | Linux / Amazon Linux 2 |
 
 ---
 
 # 🗺️ Project Roadmap
 
 ## Phase 1 - Containerization
+
 * [x] Containerize RoboShop microservices
 * [x] Configure Docker networking
 * [x] Implement Docker Compose
 * [x] Implement DNS-based service discovery
 
 ## Phase 2 - Infrastructure as Code
+
 * [x] Provision infrastructure using Terraform
 * [x] Automate infrastructure deployment
 
 ## Phase 3 - Kubernetes
+
 * [x] Deploy application on Kubernetes
 * [x] Configure AWS EBS CSI Driver for persistent storage
 * [x] Configure AWS Load Balancer Controller for ingress
 * [x] Manage deployments using Helm
 
 ## Phase 4 - CI/CD
+
 * [x] Implement GitHub Actions
 * [x] Automate infrastructure workflows
 * [x] Add Manual Approval Gate
 
 ## Phase 5 - Monitoring
+
 * [x] Deploy Prometheus
 * [x] Configure Grafana
 * [x] Monitor Kubernetes workloads
 
 ## Phase 6 - DevSecOps
+
 * [x] Integrate SonarQube SAST
 * [x] Configure Quality Gates
 * [x] Integrate Trivy Image Scanning
@@ -376,8 +438,10 @@ Kubernetes Cluster (Nodes & Pods) -> Prometheus Metrics Collection -> Grafana Da
 # 👨‍💻 Author
 
 **Ruthvik**
+
 DevOps Engineer
-GitHub: https://github.com/ruthvikk1214
+
+GitHub: [https://github.com/ruthvikk1214](https://github.com/ruthvikk1214?utm_source=gemini)
 
 ---
 
@@ -386,6 +450,7 @@ GitHub: https://github.com/ruthvikk1214
 This project demonstrates an end-to-end production-style DevOps and DevSecOps implementation for a microservices application.
 
 The complete solution covers:
+
 * 🐳 Docker
 * 🏗️ Terraform (VPC, EKS, Node Groups)
 * ☸️ Kubernetes (Ingress, StatefulSets, Deployments)
@@ -398,5 +463,3 @@ The complete solution covers:
 * 🛡️ Trivy Image Scanning
 * 📊 Prometheus
 * 📈 Grafana
-
-```
