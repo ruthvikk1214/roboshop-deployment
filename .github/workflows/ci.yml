@@ -7,12 +7,10 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch: # Manual re-trigger support
+  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
-  statuses: write
 
 env:
   AWS_REGION: us-east-1
@@ -23,6 +21,10 @@ jobs:
   sast-scan:
     name: SonarQube SAST & Quality Gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      statuses: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -56,7 +58,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Cache Maven dependencies to avoid rate limits
       - name: Cache Maven dependencies
         uses: actions/cache@v4
         with:
@@ -65,7 +66,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-
 
-      # Populate Maven cache before Trivy scan
       - name: Resolve Maven dependencies
         run: |
           find . -name "pom.xml" -type f | while read pom; do
@@ -134,14 +134,12 @@ jobs:
         run: terraform plan -var="hosted_zone_id=${{ secrets.HOSTED_ZONE_ID }}"
         working-directory: infra
 
-  # 5. Terraform Apply (Manual Approval Gate on Push & Manual Runs)
+  # 5. Terraform Apply (Manual Approval Gate)
   terraform-apply:
     name: Terraform Apply (Manual Gate)
     runs-on: ubuntu-latest
     needs: terraform-plan
-    # Ensures this stage runs on pushes to main and manual runs, but skips untrusted PR branches
     if: github.ref == 'refs/heads/main'
-    # Triggers GitHub's manual approval gate modal
     environment: production
     steps:
       - name: Checkout code
@@ -189,7 +187,6 @@ jobs:
 
           aws eks update-kubeconfig --name $CLUSTER_NAME --region ${{ env.AWS_REGION }}
 
-          # Delete old webhooks to prevent TLS certificate mismatch errors on re-runs
           kubectl delete validatingwebhookconfigurations aws-load-balancer-webhook || true
           kubectl delete mutatingwebhookconfigurations aws-load-balancer-webhook || true
 
