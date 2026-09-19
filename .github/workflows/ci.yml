@@ -31,6 +31,13 @@ jobs:
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v4
+        with:
+          args: >
+            -Dsonar.projectKey=ruthvikk1214_roboshop-deployment
+            -Dsonar.organization=ruthvikk1214
+            -Dsonar.sources=docker/
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.exclusions=**/node_modules/**,**/vendor/**
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
