@@ -173,10 +173,24 @@ jobs:
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
 
-          helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
+          if ! helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
             --namespace monitoring \
             --create-namespace \
-            -f ../helm-roboshop/monitoring-values.yaml
+            --timeout 15m \
+            -f ../helm-roboshop/monitoring-values.yaml; then
+            echo "Prometheus/Grafana deployment failed; collecting Kubernetes diagnostics."
+            kubectl describe job monitoring-stack-kube-prom-admission-create -n monitoring || true
+            kubectl get pods -n monitoring -o wide || true
+            kubectl get events -n monitoring --sort-by=.lastTimestamp | tail -n 40 || true
+            JOB_POD=$(kubectl get pods -n monitoring \
+              -l job-name=monitoring-stack-kube-prom-admission-create \
+              -o name | head -n 1)
+            if [ -n "$JOB_POD" ]; then
+              kubectl describe -n monitoring "$JOB_POD" || true
+              kubectl logs -n monitoring "$JOB_POD" --all-containers=true || true
+            fi
+            exit 1
+          fi
         working-directory: infra
 
       - name: Install AWS Load Balancer Controller
