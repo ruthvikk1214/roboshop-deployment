@@ -349,6 +349,7 @@ The project uses a lightweight, highly efficient monitoring stack:
 
 * **Prometheus:** Metrics collection and alerting rules evaluation.
 * **Grafana:** Data visualization and alert notification routing.
+* **ELK Stack:** Filebeat collects Kubernetes container logs, Logstash processes them, Elasticsearch stores them, and Kibana provides log search.
 
 ## Collected Metrics:
 
@@ -362,6 +363,34 @@ The project uses a lightweight, highly efficient monitoring stack:
 Kubernetes Cluster (Nodes & Pods) -> Prometheus Metrics Collection -> Grafana Dashboards
 
 ```
+
+## ELK Stack (Kubernetes logs)
+
+The Helm chart includes an optional ELK stack that collects container logs from every Kubernetes node. It is disabled by default so existing deployments do not incur the additional resource and storage cost.
+
+Enable it when deploying RoboShop:
+
+```bash
+helm upgrade --install roboshop ./helm-roboshop \
+  --namespace roboshop --create-namespace \
+  --set elk.enabled=true
+```
+
+Check the ELK workloads:
+
+```bash
+kubectl get pods -n roboshop -l 'app in (elasticsearch,kibana,logstash,filebeat)'
+```
+
+Kibana and Elasticsearch are internal-only ClusterIP services. Open Kibana locally with:
+
+```bash
+kubectl port-forward -n roboshop svc/kibana 5601:5601
+```
+
+Then visit `http://localhost:5601`. In Kibana, create a data view matching `roboshop-*` and select `@timestamp` as the time field to browse collected logs.
+
+This educational configuration disables Elasticsearch authentication and uses a privileged Elasticsearch init container to configure the required `vm.max_map_count` kernel setting. Keep the stack internal to a trusted cluster; do not expose Elasticsearch or Kibana publicly without enabling authentication and applying appropriate network controls. Elasticsearch data is stored in a 10Gi gp3 PVC by default.
 
 ---
 
