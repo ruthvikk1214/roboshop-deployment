@@ -141,6 +141,9 @@ jobs:
     needs: terraform-plan
     if: github.ref == 'refs/heads/main'
     environment: production
+    concurrency:
+      group: roboshop-production
+      cancel-in-progress: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -173,9 +176,29 @@ jobs:
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
 
+          if helm list --namespace monitoring --filter '^monitoring-stack$' --short | grep -qx monitoring-stack; then
+            RELEASE_STATUS=$(helm status monitoring-stack --namespace monitoring --output json | jq -r '.info.status')
+            case "$RELEASE_STATUS" in
+              pending-install|pending-upgrade|pending-rollback)
+                echo "Monitoring release is stuck in $RELEASE_STATUS; restoring the last deployed revision."
+                DEPLOYED_REVISION=$(helm history monitoring-stack --namespace monitoring --output json \
+                  | jq -r '[.[] | select(.status == "deployed")] | last | .revision // empty')
+                if [ -z "$DEPLOYED_REVISION" ]; then
+                  echo "No deployed monitoring revision is available for automatic recovery."
+                  helm history monitoring-stack --namespace monitoring
+                  exit 1
+                fi
+                helm rollback monitoring-stack "$DEPLOYED_REVISION" \
+                  --namespace monitoring --wait --timeout 15m
+                ;;
+            esac
+          fi
+
           if ! helm upgrade --install monitoring-stack prometheus-community/kube-prometheus-stack \
             --namespace monitoring \
             --create-namespace \
+            --atomic \
+            --wait \
             --timeout 15m \
             -f ../helm-roboshop/monitoring-values.yaml; then
             echo "Prometheus/Grafana deployment failed; collecting Kubernetes diagnostics."

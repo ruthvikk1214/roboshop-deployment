@@ -10,6 +10,9 @@ jobs:
   destroy:
     name: Destroy All Resources
     runs-on: ubuntu-latest
+    concurrency:
+      group: roboshop-production
+      cancel-in-progress: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,6 +35,10 @@ jobs:
           kubectl delete namespace monitoring || echo "Monitoring namespace not found"
 
           # 2. Clean up Roboshop Microservices
+          echo "Removing AWS Load Balancer Controller admission webhooks..."
+          kubectl delete validatingwebhookconfigurations aws-load-balancer-webhook --ignore-not-found
+          kubectl delete mutatingwebhookconfigurations aws-load-balancer-webhook --ignore-not-found
+
           echo "Uninstalling Roboshop application..."
           helm uninstall roboshop -n roboshop || echo "Roboshop Helm release not found"
           
