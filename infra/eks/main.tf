@@ -44,7 +44,7 @@ module "eks" {
   version = "~> 19.0"
 
   cluster_name    = "roboshop-eks"
-  cluster_version = "1.30"
+  cluster_version = "1.31"
 
   # Attach the VPC we created
   vpc_id     = var.vpc_id
@@ -89,7 +89,7 @@ module "eks" {
       capacity_type  = "SPOT"
       subnet_ids     = var.private_subnet_ids
       
-      # Reverting back to Amazon Linux 2 (AL2) which is fully supported on EKS 1.30
+      # Amazon Linux 2 (AL2) is supported on EKS 1.31.
       ami_type = "AL2_x86_64"
 
       block_device_mappings = {
