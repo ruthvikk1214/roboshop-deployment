@@ -163,7 +163,7 @@ mongodb:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: "gp2"    # Uses cluster default storage class
+    storageClass: "gp2"    # Legacy class name backed by the EKS gp3 compatibility class
     mountPath: /data/db
   resources:
     requests:

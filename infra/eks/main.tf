@@ -164,3 +164,18 @@ resource "kubernetes_storage_class_v1" "gp3" {
   }
   depends_on = [module.eks]
 }
+
+# The chart's existing PVC templates request gp2; keep that class available
+# while provisioning gp3 volumes, including PVCs from a failed prior install.
+resource "kubernetes_storage_class_v1" "gp2_compat" {
+  metadata {
+    name = "gp2"
+  }
+  storage_provisioner    = "ebs.csi.aws.com"
+  volume_binding_mode    = "WaitForFirstConsumer"
+  allow_volume_expansion = true
+  parameters = {
+    type = "gp3"
+  }
+  depends_on = [module.eks]
+}

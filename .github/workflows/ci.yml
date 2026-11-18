@@ -252,13 +252,24 @@ jobs:
           ALB_SG_ID=$(terraform output -raw alb_sg_id)
           aws eks update-kubeconfig --name $CLUSTER_NAME --region ${{ env.AWS_REGION }}
           
-          helm upgrade --install roboshop ../helm-roboshop \
+          if ! helm upgrade --install roboshop ../helm-roboshop \
             --namespace roboshop --create-namespace \
             --timeout 20m \
             --set elk.enabled=true \
             --set ingress.enabled=true \
             --set ingress.hosts[0].host=roboshop.rk1214.in \
-            --set "ingress.annotations.alb\.ingress\.kubernetes\.io/security-groups=$ALB_SG_ID"
+            --set "ingress.annotations.alb\.ingress\.kubernetes\.io/security-groups=$ALB_SG_ID"; then
+            echo "Roboshop Helm deployment failed; collecting Kubernetes diagnostics."
+            kubectl get pods,pvc,jobs -n roboshop -o wide || true
+            kubectl get events -n roboshop --sort-by=.lastTimestamp | tail -n 40 || true
+            kubectl describe job/mysql-db-seed -n roboshop || true
+            JOB_POD=$(kubectl get pods -n roboshop -l job-name=mysql-db-seed -o name | head -n 1 || true)
+            if [ -n "$JOB_POD" ]; then
+              kubectl describe -n roboshop "$JOB_POD" || true
+              kubectl logs -n roboshop "$JOB_POD" --all-containers=true || true
+            fi
+            exit 1
+          fi
         working-directory: infra
 
       - name: Configure Route53 DNS
