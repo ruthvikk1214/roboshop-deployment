@@ -12,14 +12,6 @@ CLUSTER_NAME=$(terraform output -raw cluster_name)
 REGION=$(terraform output -raw aws_region 2>/dev/null || echo "us-east-1")
 VPC_ID=$(terraform output -raw vpc_id)
 
-kubectl delete validatingwebhookconfigurations aws-load-balancer-webhook || true
-kubectl delete mutatingwebhookconfigurations aws-load-balancer-webhook || true
-
-if kubectl get deployment aws-load-balancer-controller -n kube-system >/dev/null 2>&1; then
-  kubectl rollout restart deployment/aws-load-balancer-controller -n kube-system
-  kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=120s
-fi
-
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
   --namespace kube-system \
   --create-namespace \
@@ -31,7 +23,7 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set keepTLSSecret=true \
   --set defaultIngressClass=true
 
-kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=120s
+kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=5m
 
 # 2. Deploy the Roboshop Helm chart
 helm upgrade --install roboshop ./helm-roboshop \
