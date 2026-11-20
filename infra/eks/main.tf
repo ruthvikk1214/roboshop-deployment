@@ -165,8 +165,9 @@ resource "kubernetes_storage_class_v1" "gp3" {
   depends_on = [module.eks]
 }
 
-# The chart's existing PVC templates request gp2; keep that class available
-# while provisioning gp3 volumes, including PVCs from a failed prior install.
+# Compatibility StorageClass for PVCs that requested the legacy "gp2" name
+# (older revisions of the chart). New installs use the gp3 class above.
+# It points at the CSI driver directly so it works even without CSI migration.
 resource "kubernetes_storage_class_v1" "gp2_compat" {
   metadata {
     name = "gp2"

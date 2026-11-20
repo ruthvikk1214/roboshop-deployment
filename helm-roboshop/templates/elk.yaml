@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: logstash-pipeline
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 data:
   logstash.conf: |
     input {
@@ -23,7 +23,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: filebeat-config
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 data:
   filebeat.yml: |
     filebeat.inputs:
@@ -51,7 +51,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: elasticsearch
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: elasticsearch
 spec:
@@ -67,7 +67,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: elasticsearch
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 spec:
   serviceName: elasticsearch
   replicas: 1
@@ -127,7 +127,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: kibana
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: kibana
 spec:
@@ -143,7 +143,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kibana
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 spec:
   replicas: 1
   selector:
@@ -176,7 +176,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: logstash
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: logstash
 spec:
@@ -192,7 +192,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: logstash
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 spec:
   replicas: 1
   selector:
@@ -232,12 +232,12 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: filebeat
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ .Values.namespace }}-filebeat
+  name: {{ .Release.Namespace }}-filebeat
 rules:
   - apiGroups: [""]
     resources: ["pods", "namespaces", "nodes"]
@@ -246,21 +246,21 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ .Values.namespace }}-filebeat
+  name: {{ .Release.Namespace }}-filebeat
 subjects:
   - kind: ServiceAccount
     name: filebeat
-    namespace: {{ .Values.namespace }}
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
-  name: {{ .Values.namespace }}-filebeat
+  name: {{ .Release.Namespace }}-filebeat
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: filebeat
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 spec:
   selector:
     matchLabels:

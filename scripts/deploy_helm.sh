@@ -28,8 +28,9 @@ kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --
 # 2. Deploy the Roboshop Helm chart
 helm upgrade --install roboshop ./helm-roboshop \
   --namespace roboshop --create-namespace \
+  --wait --timeout 20m \
   --set ingress.enabled=true \
-  --set ingress.hosts[0].host=roboshop.rk1214.in
+  --set ingress.host=roboshop.rk1214.in
 
 # 3. Wait for ALB to be provisioned
 echo "Waiting for ALB 'roboshop-alb' to be provisioned..."

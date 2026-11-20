@@ -3,13 +3,16 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: roboshop-ingress
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   annotations:
     {{- toYaml .Values.ingress.annotations | nindent 4 }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - http:
+    - {{- if .Values.ingress.host }}
+      host: {{ .Values.ingress.host | quote }}
+      {{- end }}
+      http:
         paths:
           {{- range .Values.ingress.paths }}
           - path: {{ .path }}

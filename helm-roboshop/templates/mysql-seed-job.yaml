@@ -1,3 +1,4 @@
+{{- if and .Values.mysql.seed .Values.mysql.seed.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -7,8 +8,10 @@ metadata:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
-  activeDeadlineSeconds: 1200
-  backoffLimit: 5
+  # Keep this below the Helm --timeout so the Job fails first and reports a real
+  # error instead of Helm silently timing out.
+  activeDeadlineSeconds: 600
+  backoffLimit: 2
   template:
     metadata:
       name: mysql-db-seed
@@ -46,3 +49,4 @@ spec:
           else
             echo "Master data already loaded (Count: $COUNT). Skipping."
           fi
+{{- end }}

@@ -236,9 +236,17 @@ Helm is used to manage and deploy Kubernetes applications. The Helm charts are l
 Install Application:
 
 ```bash
-helm install roboshop .
-
+helm upgrade --install roboshop ./helm-roboshop \
+  --namespace roboshop --create-namespace \
+  --wait --timeout 20m \
+  --set ingress.enabled=true \
+  --set ingress.host=roboshop.rk1214.in
 ```
+
+Database seeding is handled by the MySQL image itself (`docker/mysql/db` is copied into
+`/docker-entrypoint-initdb.d` and applied on first boot). The optional `mysql-db-seed` Job is a
+Helm hook, so it is disabled by default; enable it only for a manual re-seed with
+`--set mysql.seed.enabled=true`. When enabled it fails after 10 minutes, before the Helm timeout.
 
 Check releases:
 
@@ -367,6 +375,8 @@ Kubernetes Cluster (Nodes & Pods) -> Prometheus Metrics Collection -> Grafana Da
 ## ELK Stack (Kubernetes logs)
 
 The Helm chart includes an optional ELK stack that collects container logs from every Kubernetes node. It is disabled by default so existing deployments do not incur the additional resource and storage cost.
+
+> **Capacity:** ELK adds five pods (Elasticsearch, Kibana, Logstash and one Filebeat pod per node) plus ~1.2 vCPU / ~2.2 GiB of requests. The default node group is `2 × t3.medium`, which only allows 17 pods per node, so the CI pipeline keeps ELK disabled. Scale the node group (for example `t3.large`) before enabling it.
 
 Enable it when deploying RoboShop:
 

@@ -8,7 +8,7 @@ global:
   imageTag: "1.0"                 # Default image tag for all services
   imagePullPolicy: IfNotPresent
 
-# -- Namespace (set via helm install --namespace)
+# -- Namespace (deprecated: templates now use .Release.Namespace / --namespace)
 namespace: roboshop
 
 # =============================================================================
@@ -163,7 +163,7 @@ mongodb:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: "gp2"    # Legacy class name backed by the EKS gp3 compatibility class
+    storageClass: "gp3"    # Must exist in the cluster (created by infra/eks)
     mountPath: /data/db
   resources:
     requests:
@@ -185,10 +185,15 @@ mysql:
     port: 3306
   env:
     MYSQL_ROOT_PASSWORD: "RoboShop@1"
+  # The custom MySQL image copies db/*.sql into /docker-entrypoint-initdb.d, so the
+  # database seeds itself on first boot. The seed Job is only needed for manual
+  # repairs; it runs as a Helm hook, so enabling it makes the deploy wait for it.
+  seed:
+    enabled: false
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: "gp2"
+    storageClass: "gp3"
     mountPath: /var/lib/mysql
   resources:
     requests:
@@ -212,7 +217,7 @@ redis:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: "gp2"
+    storageClass: "gp3"
     mountPath: /data
   resources:
     requests:
@@ -239,7 +244,7 @@ rabbitmq:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: "gp2"
+    storageClass: "gp3"
     mountPath: /var/lib/rabbitmq
   resources:
     requests:
