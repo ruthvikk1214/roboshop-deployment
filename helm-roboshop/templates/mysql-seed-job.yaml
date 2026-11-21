@@ -6,9 +6,10 @@ metadata:
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation
+    "helm.sh/hook-weight": "10"
 spec:
-  activeDeadlineSeconds: 900
-  backoffLimit: 5
+  activeDeadlineSeconds: 1800
+  backoffLimit: 3
   template:
     metadata:
       name: mysql-db-seed
@@ -31,16 +32,22 @@ spec:
         - /bin/bash
         - -ec
         - |
+          echo "=== MySQL DB Seed Job Started ==="
           echo "Waiting for MySQL to accept authenticated queries..."
+          echo "(MySQL runs init scripts on first boot — this can take 10-20 min)"
           RETRIES=0
-          MAX_RETRIES=60
+          MAX_RETRIES=180
           until mysql --protocol=tcp -h mysql -uroot -e "SELECT 1" >/dev/null 2>&1; do
             RETRIES=$((RETRIES + 1))
             if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
-              echo "ERROR: MySQL did not become ready after $MAX_RETRIES attempts (5 min). Exiting."
+              echo "ERROR: MySQL did not become ready after $MAX_RETRIES attempts (15 min). Exiting."
+              echo "--- Debugging: attempting direct connection to get error ---"
+              mysql --protocol=tcp -h mysql -uroot -e "SELECT 1" 2>&1 || true
               exit 1
             fi
-            echo "  Attempt $RETRIES/$MAX_RETRIES — MySQL not ready, retrying in 5s..."
+            if [ $((RETRIES % 12)) -eq 0 ]; then
+              echo "  Minute $((RETRIES / 12)) — MySQL not ready yet, still waiting..."
+            fi
             sleep 5
           done
 
@@ -61,3 +68,4 @@ spec:
           else
             echo "Master data already loaded (Count: $COUNT). Skipping."
           fi
+          echo "=== MySQL DB Seed Job Completed Successfully ==="
