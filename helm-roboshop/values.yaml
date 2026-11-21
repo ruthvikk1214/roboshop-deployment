@@ -193,9 +193,9 @@ mysql:
   resources:
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 512Mi
     limits:
-      cpu: 300m
+      cpu: 500m
       memory: 1Gi
 
 redis:
