@@ -260,14 +260,31 @@ jobs:
             --set ingress.hosts[0].host=roboshop.rk1214.in \
             --set "ingress.annotations.alb\.ingress\.kubernetes\.io/security-groups=$ALB_SG_ID"; then
             echo "Roboshop Helm deployment failed; collecting Kubernetes diagnostics."
+            echo "===== POD STATUS ====="
             kubectl get pods,pvc,jobs -n roboshop -o wide || true
-            kubectl get events -n roboshop --sort-by=.lastTimestamp | tail -n 40 || true
+            echo "===== EVENTS ====="
+            kubectl get events -n roboshop --sort-by=.lastTimestamp | tail -n 50 || true
+
+            echo "===== MYSQL-0 POD DESCRIBE ====="
+            kubectl describe pod mysql-0 -n roboshop || true
+            echo "===== MYSQL-0 POD LOGS ====="
+            kubectl logs mysql-0 -n roboshop --tail=80 || true
+            echo "===== MYSQL-0 PREVIOUS LOGS (if crashed) ====="
+            kubectl logs mysql-0 -n roboshop --previous --tail=80 || true
+
+            echo "===== SEED JOB DESCRIBE ====="
             kubectl describe job/mysql-db-seed -n roboshop || true
             JOB_POD=$(kubectl get pods -n roboshop -l job-name=mysql-db-seed -o name | head -n 1 || true)
             if [ -n "$JOB_POD" ]; then
+              echo "===== SEED JOB POD DESCRIBE ====="
               kubectl describe -n roboshop "$JOB_POD" || true
+              echo "===== SEED JOB POD LOGS ====="
               kubectl logs -n roboshop "$JOB_POD" --all-containers=true || true
             fi
+
+            echo "===== NODE RESOURCES ====="
+            kubectl top nodes || true
+            kubectl describe nodes | grep -A 10 "Allocated resources" || true
             exit 1
           fi
         working-directory: infra

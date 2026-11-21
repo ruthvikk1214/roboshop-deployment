@@ -192,11 +192,11 @@ mysql:
     mountPath: /var/lib/mysql
   resources:
     requests:
-      cpu: 100m
+      cpu: 200m
       memory: 512Mi
     limits:
       cpu: 500m
-      memory: 1Gi
+      memory: 1536Mi
 
 redis:
   name: redis
