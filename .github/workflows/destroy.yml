@@ -24,44 +24,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Destroy Helm Deployments & PVCs (if exists)
-        run: |
-          # Connect to EKS. If the cluster is already gone, exit cleanly.
-          aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }} || exit 0
-          
-          # 1. Clean up Monitoring Stack (Prometheus & Grafana)
-          echo "Uninstalling monitoring stack..."
-          helm uninstall monitoring-stack -n monitoring || echo "Monitoring release not found"
-          kubectl delete namespace monitoring || echo "Monitoring namespace not found"
-
-          # 2. Clean up Roboshop Microservices
-          echo "Removing AWS Load Balancer Controller admission webhooks..."
-          kubectl delete validatingwebhookconfigurations aws-load-balancer-webhook --ignore-not-found
-          kubectl delete mutatingwebhookconfigurations aws-load-balancer-webhook --ignore-not-found
-
-          echo "Uninstalling Roboshop application..."
-          helm uninstall roboshop -n roboshop || echo "Roboshop Helm release not found"
-          
-          # 3. Nuke ALL PVCs across the entire cluster to detach EBS volumes
-          echo "Wiping all PVCs to force EBS volume detachment..."
-          kubectl delete pvc --all --all-namespaces || true
-          
-          # 4. Actively wait for AWS Load Balancer Controller to remove the ALB
-          echo "Waiting for AWS ALB 'roboshop-alb' to be deleted by controller..."
-          while aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} >/dev/null 2>&1; do
-            echo "ALB still provisioning teardown in AWS, waiting 10s..."
-            sleep 10
-          done
-          echo "ALB successfully removed from AWS."
-
-          # 5. Wait for EBS Volumes to physically detach
-          echo "Giving AWS 60 seconds to detach EBS volumes from the nodes..."
-          sleep 60
-
-          # 6. Clean up namespace after the ALB has been deleted
-          kubectl delete namespace roboshop || echo "Roboshop namespace not found"
-        continue-on-error: true
-
       - name: Destroy Route53 DNS (if exists)
         run: |
           # Fetch ALB details if it still exists; use dummy values if already removed
@@ -77,6 +39,63 @@ jobs:
             -var="alb_zone_id=$ALB_ZONE" \
             -auto-approve || echo "Route53 state not found or already destroyed"
         working-directory: infra/route53
+        continue-on-error: true
+
+      - name: Destroy Helm Deployments & Kubernetes Resources
+        run: |
+          # Connect to EKS. If the cluster is already gone, exit cleanly.
+          aws eks update-kubeconfig --name roboshop-eks --region ${{ env.AWS_REGION }} || exit 0
+          
+          # 1. Clean up Monitoring Stack (Prometheus & Grafana)
+          echo "Uninstalling monitoring stack..."
+          helm uninstall monitoring-stack -n monitoring || echo "Monitoring release not found"
+          kubectl delete namespace monitoring --ignore-not-found || true
+
+          # 2. Clean up Roboshop Application & Ingress
+          echo "Uninstalling Roboshop application..."
+          helm uninstall roboshop -n roboshop || echo "Roboshop Helm release not found"
+
+          # 3. Nuke ALL PVCs across the cluster so EBS volumes can detach and be deleted
+          echo "Wiping all PVCs to force EBS volume detachment..."
+          kubectl delete pvc --all --all-namespaces || true
+
+          # 4. Wait for AWS Load Balancer Controller to remove the ALB (or force delete if stuck)
+          echo "Waiting for AWS ALB 'roboshop-alb' to be deleted by controller..."
+          TIMEOUT=12
+          while [ $TIMEOUT -gt 0 ] && aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} >/dev/null 2>&1; do
+            echo "ALB still provisioning teardown in AWS, waiting 10s... ($TIMEOUT checks remaining)"
+            sleep 10
+            TIMEOUT=$((TIMEOUT-1))
+          done
+
+          # Force delete ALB if controller did not finish in time
+          ALB_ARN=$(aws elbv2 describe-load-balancers --names roboshop-alb --region ${{ env.AWS_REGION }} --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || true)
+          if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
+            echo "Force deleting lingering ALB: $ALB_ARN"
+            aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" --region ${{ env.AWS_REGION }} || true
+            sleep 15
+          fi
+          echo "ALB successfully removed from AWS."
+
+          # 5. Clean up any lingering Target Groups created for roboshop
+          echo "Cleaning up any roboshop target groups..."
+          for TG_ARN in $(aws elbv2 describe-target-groups --region ${{ env.AWS_REGION }} --query 'TargetGroups[?contains(TargetGroupName, `k8s-roboshop`)].TargetGroupArn' --output text 2>/dev/null || true); do
+            echo "Deleting Target Group: $TG_ARN"
+            aws elbv2 delete-target-group --target-group-arn "$TG_ARN" --region ${{ env.AWS_REGION }} || true
+          done
+
+          # 6. Uninstall AWS Load Balancer Controller and remove webhooks
+          echo "Uninstalling AWS Load Balancer Controller..."
+          helm uninstall aws-load-balancer-controller -n kube-system || true
+          kubectl delete validatingwebhookconfigurations aws-load-balancer-webhook --ignore-not-found || true
+          kubectl delete mutatingwebhookconfigurations aws-load-balancer-webhook --ignore-not-found || true
+
+          # 7. Wait for EBS Volumes to physically detach
+          echo "Giving AWS 45 seconds to detach EBS volumes from the nodes..."
+          sleep 45
+
+          # 8. Clean up roboshop namespace
+          kubectl delete namespace roboshop --ignore-not-found || true
         continue-on-error: true
 
       - name: Setup Terraform
