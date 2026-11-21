@@ -163,7 +163,7 @@ mongodb:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: "gp2"    # Legacy class name backed by the EKS gp3 compatibility class
+    storageClass: "gp3"
     mountPath: /data/db
   resources:
     requests:
@@ -188,7 +188,7 @@ mysql:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: "gp2"
+    storageClass: "gp3"
     mountPath: /var/lib/mysql
   resources:
     requests:
@@ -212,7 +212,7 @@ redis:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: "gp2"
+    storageClass: "gp3"
     mountPath: /data
   resources:
     requests:
@@ -239,7 +239,7 @@ rabbitmq:
   persistence:
     enabled: true
     size: 1Gi
-    storageClass: "gp2"
+    storageClass: "gp3"
     mountPath: /var/lib/rabbitmq
   resources:
     requests:
