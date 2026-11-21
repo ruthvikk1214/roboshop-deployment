@@ -308,36 +308,37 @@ elk:
   enabled: false
   imageTag: "8.17.3"
   elasticsearch:
-    storageSize: 10Gi
+    javaOpts: "-Xms256m -Xmx256m"
+    storageSize: 2Gi
     storageClass: "gp3"
     resources:
       requests:
-        cpu: 500m
-        memory: 1Gi
+        cpu: 150m
+        memory: 512Mi
       limits:
-        cpu: "1"
-        memory: 1Gi
+        cpu: 500m
+        memory: 768Mi
   kibana:
     resources:
       requests:
-        cpu: 250m
-        memory: 512Mi
+        cpu: 100m
+        memory: 256Mi
       limits:
-        cpu: 500m
-        memory: 1Gi
+        cpu: 300m
+        memory: 512Mi
   logstash:
     resources:
       requests:
-        cpu: 250m
-        memory: 512Mi
+        cpu: 100m
+        memory: 256Mi
       limits:
-        cpu: 500m
-        memory: 1Gi
+        cpu: 300m
+        memory: 512Mi
   filebeat:
     resources:
       requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
         cpu: 100m
         memory: 128Mi
-      limits:
-        cpu: 200m
-        memory: 256Mi
